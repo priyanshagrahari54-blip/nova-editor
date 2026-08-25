@@ -1,0 +1,31 @@
+NOVA STUDIO — ANDROID APK BUILD GUIDE
+======================================
+
+Nova Studio is currently deployed as a responsive web application. A genuine Android APK must be compiled and cryptographically signed with the app owner's Android credentials; it cannot be truthfully produced as a download by a browser-only website.
+
+RECOMMENDED PROFESSIONAL PATH: CAPACITOR
+
+1. On a development computer, install Node.js 20+, Android Studio, and Android SDK.
+2. In the Nova Studio project folder run:
+   npm install @capacitor/core @capacitor/cli @capacitor/android
+   npx cap init "Nova Studio" "studio.nova.app"
+   npm run build
+   npx cap add android
+   npx cap sync android
+   npx cap open android
+3. Android Studio opens the native Android project.
+4. Select Build > Generate Signed Bundle / APK > APK.
+5. Create or select the app owner's keystore, choose release, then build.
+6. The signed APK is produced under android/app/release/.
+
+PLAY STORE DELIVERY
+
+For Google Play, choose Android App Bundle (AAB) rather than APK in step 4. Create a Google Play Console developer account, configure privacy/data disclosures, upload the signed AAB, complete testing, then submit for review.
+
+MOBILE WEB INSTALL (AVAILABLE NOW)
+
+Open the Nova Studio mobile page from the QR code. In Chrome on Android choose Install app / Add to Home screen. On iPhone use Share > Add to Home Screen.
+
+SECURITY NOTE
+
+Never share your keystore or signing passwords. The same signing key is required for future app updates.
