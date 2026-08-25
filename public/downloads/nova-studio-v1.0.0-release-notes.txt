@@ -1,0 +1,5 @@
+NOVA STUDIO v1.0.0
+
+Release asset: nova-studio-v1.0.0-source.tar.gz
+
+Includes the full Vite + React source, release notes, and public assets.
