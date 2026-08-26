@@ -1,6 +1,7 @@
 import { useMemo, useRef, useState } from 'react'
 import { Check, ChevronDown, Download, Film, Image as ImageIcon, LoaderCircle, MonitorUp, ShieldCheck, Sparkles, X } from 'lucide-react'
 import type { EditorLayer, EditorSettings } from '../App'
+import { applySelectivePhotoAdjustments, buildPhotoFilter } from '../lib/photoAdjustments'
 
 type Asset = { name: string; kind: 'image' | 'video'; url: string }
 type Resolution = 'source' | '1080' | '2160'
@@ -9,9 +10,7 @@ type Props = { asset: Asset | null; settings: EditorSettings; layers: EditorLaye
 type CaptureVideo = HTMLVideoElement & { captureStream?: () => MediaStream; mozCaptureStream?: () => MediaStream }
 
 function editorFilter(settings: EditorSettings) {
-  const brightness = Math.max(0, settings.brightness + settings.exposure + settings.highlights * .06 + settings.shadows * .1 + settings.lift * .35 + settings.gamma * .2)
-  const contrast = Math.max(0, settings.contrast + settings.sharpness / 3 + settings.highlights * .18 - settings.shadows * .14 + settings.gain * .4 - settings.fade * .22)
-  return `brightness(${brightness}%) contrast(${contrast}%) saturate(${settings.saturation}%) sepia(${Math.abs(settings.temperature) / 900}) hue-rotate(${settings.tint / 4 + settings.hue}deg) blur(${settings.blur}px)`
+  return buildPhotoFilter(settings)
 }
 
 function normalizedRotation(value: number) {
@@ -28,9 +27,12 @@ function targetSize(width: number, height: number, resolution: Resolution, setti
   return { width: Math.round(targetHeight * outputWidth / outputHeight), height: targetHeight }
 }
 
-function drawFinishing(context: CanvasRenderingContext2D, width: number, height: number, settings: EditorSettings, layers: EditorLayer[], frame = 0) {
-  if (settings.temperature !== 0) { context.save(); context.globalCompositeOperation = 'soft-light'; context.globalAlpha = Math.abs(settings.temperature) / 240; context.fillStyle = settings.temperature > 0 ? '#ff8a3d' : '#4d78ff'; context.fillRect(0, 0, width, height); context.restore() }
-  if (settings.tint !== 0) { context.save(); context.globalCompositeOperation = 'soft-light'; context.globalAlpha = Math.abs(settings.tint) / 270; context.fillStyle = settings.tint > 0 ? '#d85adf' : '#42c88a'; context.fillRect(0, 0, width, height); context.restore() }
+function drawFinishing(context: CanvasRenderingContext2D, width: number, height: number, settings: EditorSettings, layers: EditorLayer[], frame = 0, applyPhotoTone = false) {
+  if (applyPhotoTone) applySelectivePhotoAdjustments(context, width, height, settings)
+  else {
+    if (settings.temperature !== 0) { context.save(); context.globalCompositeOperation = 'soft-light'; context.globalAlpha = Math.abs(settings.temperature) / 240; context.fillStyle = settings.temperature > 0 ? '#ff8a3d' : '#4d78ff'; context.fillRect(0, 0, width, height); context.restore() }
+    if (settings.tint !== 0) { context.save(); context.globalCompositeOperation = 'soft-light'; context.globalAlpha = Math.abs(settings.tint) / 270; context.fillStyle = settings.tint > 0 ? '#d85adf' : '#42c88a'; context.fillRect(0, 0, width, height); context.restore() }
+  }
   if (settings.fade > 0) { context.save(); context.globalAlpha = settings.fade / 350; context.fillStyle = '#a49a8d'; context.fillRect(0, 0, width, height); context.restore() }
   if (settings.vignette > 0) {
     const gradient = context.createRadialGradient(width / 2, height / 2, Math.min(width, height) * .18, width / 2, height / 2, Math.max(width, height) * .72)
@@ -78,7 +80,7 @@ export function ExportStudio({ asset, settings, layers, onClose, onNotice }: Pro
     const size = targetSize(image.naturalWidth, image.naturalHeight, resolution, settings)
     const canvas = document.createElement('canvas'); canvas.width = size.width; canvas.height = size.height
     const context = canvas.getContext('2d'); if (!context) throw new Error('Canvas export is unavailable.')
-    setStatus('Rendering color and VFX…'); setProgress(35); drawSource(context, image, image.naturalWidth, image.naturalHeight, size.width, size.height, settings); drawFinishing(context, size.width, size.height, settings, layers)
+    setStatus('Rendering color and VFX…'); setProgress(35); drawSource(context, image, image.naturalWidth, image.naturalHeight, size.width, size.height, settings); drawFinishing(context, size.width, size.height, settings, layers, 0, true)
     setStatus('Encoding master image…'); setProgress(78)
     const mime = format === 'png' ? 'image/png' : format === 'webp' ? 'image/webp' : 'image/jpeg'
     const blob = await new Promise<Blob | null>(resolve => canvas.toBlob(resolve, mime, quality / 100)); if (!blob) throw new Error('The image encoder returned no data.')

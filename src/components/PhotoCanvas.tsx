@@ -1,5 +1,6 @@
 import { PointerEvent, useEffect, useRef, useState } from 'react'
 import type { EditorLayer, EditorSettings } from '../App'
+import { applySelectivePhotoAdjustments, buildPhotoFilter } from '../lib/photoAdjustments'
 
 type Props = { src: string; fileName: string; settings: EditorSettings; before: boolean; layers: EditorLayer[]; resetViewToken: number; onImageReady: (width: number, height: number) => void }
 type LoadedImage = { src: string; image: HTMLImageElement }
@@ -8,21 +9,6 @@ const PREVIEW_MAX_EDGE = 1600
 
 function normalizedRotation(value: number) {
   return ((value % 360) + 360) % 360
-}
-
-function canvasFilter(settings: EditorSettings) {
-  const brightness = Math.max(0, settings.brightness + settings.exposure + settings.highlights * .06 + settings.shadows * .1 + settings.lift * .35 + settings.gamma * .2)
-  const contrast = Math.max(0, settings.contrast + settings.sharpness / 3 + settings.highlights * .18 - settings.shadows * .14 + settings.gain * .4 - settings.fade * .22)
-  return `brightness(${brightness}%) contrast(${contrast}%) saturate(${settings.saturation}%) sepia(${Math.abs(settings.temperature) / 900}) hue-rotate(${settings.tint / 4 + settings.hue}deg) blur(${settings.blur}px)`
-}
-
-function drawColorCast(context: CanvasRenderingContext2D, width: number, height: number, settings: EditorSettings) {
-  if (settings.temperature !== 0) {
-    context.save(); context.globalCompositeOperation = 'soft-light'; context.globalAlpha = Math.abs(settings.temperature) / 240; context.fillStyle = settings.temperature > 0 ? '#ff8a3d' : '#4d78ff'; context.fillRect(0, 0, width, height); context.restore()
-  }
-  if (settings.tint !== 0) {
-    context.save(); context.globalCompositeOperation = 'soft-light'; context.globalAlpha = Math.abs(settings.tint) / 270; context.fillStyle = settings.tint > 0 ? '#d85adf' : '#42c88a'; context.fillRect(0, 0, width, height); context.restore()
-  }
 }
 
 export function PhotoCanvas({ src, fileName, settings, before, layers, resetViewToken, onImageReady }: Props) {
@@ -61,18 +47,19 @@ export function PhotoCanvas({ src, fileName, settings, before, layers, resetView
       canvas.width = quarterTurn ? drawHeight : drawWidth; canvas.height = quarterTurn ? drawWidth : drawHeight
       const ctx = canvas.getContext('2d')
       if (!ctx) return
+      ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = 'high'
       ctx.save(); ctx.clearRect(0, 0, canvas.width, canvas.height)
-      ctx.filter = before ? 'none' : canvasFilter(settings)
+      ctx.filter = before ? 'none' : buildPhotoFilter(settings)
       ctx.translate(canvas.width / 2, canvas.height / 2)
       ctx.rotate(rotation * Math.PI / 180)
       ctx.scale(before ? 1 : settings.flip ? -1 : 1, before ? 1 : settings.flipVertical ? -1 : 1)
       if (!before && settings.glow > 0) {
-        ctx.save(); ctx.globalAlpha = settings.glow / 90; ctx.globalCompositeOperation = 'screen'; ctx.filter = `${canvasFilter(settings)} blur(${settings.glow / 2}px)`; ctx.drawImage(image, sx, sy, sw, sh, -drawWidth / 2, -drawHeight / 2, drawWidth, drawHeight); ctx.restore()
+        ctx.save(); ctx.globalAlpha = settings.glow / 90; ctx.globalCompositeOperation = 'screen'; ctx.filter = `${buildPhotoFilter(settings)} blur(${settings.glow / 2}px)`; ctx.drawImage(image, sx, sy, sw, sh, -drawWidth / 2, -drawHeight / 2, drawWidth, drawHeight); ctx.restore()
       }
       ctx.drawImage(image, sx, sy, sw, sh, -drawWidth / 2, -drawHeight / 2, drawWidth, drawHeight)
       ctx.restore()
       if (!before) {
-        drawColorCast(ctx, canvas.width, canvas.height, settings)
+        applySelectivePhotoAdjustments(ctx, canvas.width, canvas.height, settings)
         if (settings.fade > 0) { ctx.save(); ctx.globalAlpha = settings.fade / 350; ctx.fillStyle = '#a49a8d'; ctx.fillRect(0, 0, canvas.width, canvas.height); ctx.restore() }
         if (settings.vignette > 0) {
           const vignette = ctx.createRadialGradient(canvas.width / 2, canvas.height / 2, Math.min(canvas.width, canvas.height) * .18, canvas.width / 2, canvas.height / 2, Math.max(canvas.width, canvas.height) * .72)
