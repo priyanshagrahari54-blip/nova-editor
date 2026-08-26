@@ -17,6 +17,7 @@ export function buildPhotoFilter(settings: EditorSettings) {
   const exposureMultiplier = 2 ** (settings.exposure / 100)
   const brightness = Math.max(0, settings.brightness * exposureMultiplier + settings.lift * .35 + settings.gamma * .2)
   const contrast = Math.max(0, settings.contrast + settings.sharpness / 3 + settings.gain * .4 - settings.fade * .22)
+  if (Math.abs(brightness - 100) < .001 && Math.abs(contrast - 100) < .001 && settings.saturation === 100 && settings.hue === 0 && settings.blur === 0) return 'none'
   return `brightness(${brightness}%) contrast(${contrast}%) saturate(${settings.saturation}%) hue-rotate(${settings.hue}deg) blur(${settings.blur}px)`
 }
 

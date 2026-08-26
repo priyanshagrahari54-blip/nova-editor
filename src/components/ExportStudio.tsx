@@ -2,6 +2,7 @@ import { useMemo, useRef, useState } from 'react'
 import { Check, ChevronDown, Download, Film, Image as ImageIcon, LoaderCircle, MonitorUp, ShieldCheck, Sparkles, X } from 'lucide-react'
 import type { EditorLayer, EditorSettings } from '../App'
 import { applySelectivePhotoAdjustments, buildPhotoFilter } from '../lib/photoAdjustments'
+import { cropRectFromSettings, normalizedRotation, rotatedBounds } from '../lib/photoGeometry'
 
 type Asset = { name: string; kind: 'image' | 'video'; url: string }
 type Resolution = 'source' | '1080' | '2160'
@@ -13,18 +14,13 @@ function editorFilter(settings: EditorSettings) {
   return buildPhotoFilter(settings)
 }
 
-function normalizedRotation(value: number) {
-  return ((value % 360) + 360) % 360
-}
-
 function targetSize(width: number, height: number, resolution: Resolution, settings: EditorSettings) {
-  const cropScale = Math.max(.01, 1 - settings.crop / 50)
-  const croppedWidth = Math.max(1, Math.round(width * cropScale)); const croppedHeight = Math.max(1, Math.round(height * cropScale))
-  const quarterTurn = normalizedRotation(settings.rotate) === 90 || normalizedRotation(settings.rotate) === 270
-  const outputWidth = quarterTurn ? croppedHeight : croppedWidth; const outputHeight = quarterTurn ? croppedWidth : croppedHeight
-  if (resolution === 'source') return { width: outputWidth, height: outputHeight }
+  const crop = cropRectFromSettings(settings)
+  const croppedWidth = Math.max(1, Math.round(width * crop.width)); const croppedHeight = Math.max(1, Math.round(height * crop.height))
+  const output = rotatedBounds(croppedWidth, croppedHeight, settings.rotate)
+  if (resolution === 'source') return { width: Math.max(1, Math.round(output.width)), height: Math.max(1, Math.round(output.height)) }
   const targetHeight = resolution === '2160' ? 2160 : 1080
-  return { width: Math.round(targetHeight * outputWidth / outputHeight), height: targetHeight }
+  return { width: Math.round(targetHeight * output.width / output.height), height: targetHeight }
 }
 
 function drawFinishing(context: CanvasRenderingContext2D, width: number, height: number, settings: EditorSettings, layers: EditorLayer[], frame = 0, applyPhotoTone = false) {
@@ -50,10 +46,11 @@ function drawFinishing(context: CanvasRenderingContext2D, width: number, height:
 }
 
 function drawSource(context: CanvasRenderingContext2D, source: CanvasImageSource, sourceWidth: number, sourceHeight: number, width: number, height: number, settings: EditorSettings) {
-  const crop = settings.crop / 100
-  const sx = sourceWidth * crop; const sy = sourceHeight * crop; const sw = Math.max(1, sourceWidth - sx * 2); const sh = Math.max(1, sourceHeight - sy * 2)
-  const rotation = normalizedRotation(settings.rotate); const quarterTurn = rotation === 90 || rotation === 270
-  const drawWidth = quarterTurn ? height : width; const drawHeight = quarterTurn ? width : height
+  const crop = cropRectFromSettings(settings)
+  const sx = sourceWidth * crop.x; const sy = sourceHeight * crop.y; const sw = Math.max(1, sourceWidth * crop.width); const sh = Math.max(1, sourceHeight * crop.height)
+  const rotation = normalizedRotation(settings.rotate)
+  const bounds = rotatedBounds(sw, sh, rotation); const scale = Math.min(width / bounds.width, height / bounds.height)
+  const drawWidth = sw * scale; const drawHeight = sh * scale
   context.save(); context.clearRect(0, 0, width, height); context.filter = editorFilter(settings); context.translate(width / 2, height / 2); context.rotate(rotation * Math.PI / 180); context.scale(settings.flip ? -1 : 1, settings.flipVertical ? -1 : 1)
   if (settings.glow > 0) { context.save(); context.globalAlpha = settings.glow / 90; context.filter = `${editorFilter(settings)} blur(${settings.glow / 2}px)`; context.globalCompositeOperation = 'screen'; context.drawImage(source, sx, sy, sw, sh, -drawWidth / 2, -drawHeight / 2, drawWidth, drawHeight); context.restore() }
   context.drawImage(source, sx, sy, sw, sh, -drawWidth / 2, -drawHeight / 2, drawWidth, drawHeight); context.restore()
