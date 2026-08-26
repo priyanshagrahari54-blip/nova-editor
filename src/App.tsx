@@ -44,14 +44,14 @@ function App() {
   const [viewResetToken, setViewResetToken] = useState(0)
   const inputRef = useRef<HTMLInputElement>(null)
   const videoRef = useRef<HTMLVideoElement>(null)
-  const objectUrlsRef = useRef<string[]>([])
+  const objectUrlsRef = useRef(new Set<string>())
   const adjustmentActiveRef = useRef(false)
   const selected = media.find(item => item.id === selectedId) ?? null
   const activeFilter = before ? 'none' : `brightness(${Math.max(0, settings.brightness + settings.exposure + settings.lift * .35 + settings.gamma * .2)}%) contrast(${Math.max(0, settings.contrast + settings.highlights / 3 - settings.shadows / 4 + settings.gain * .4 - settings.fade * .22)}%) saturate(${settings.saturation}%) sepia(${Math.max(0, settings.temperature) / 500}) hue-rotate(${settings.tint / 3 + settings.hue}deg) blur(${settings.blur}px)`
 
   useEffect(() => { recentProjects().then(items => setSaved(items.map(item => item.name))).catch(() => undefined) }, [])
   useEffect(() => { if (!toast) return; const id = window.setTimeout(() => setToast(''), 3200); return () => window.clearTimeout(id) }, [toast])
-  useEffect(() => () => objectUrlsRef.current.forEach(url => URL.revokeObjectURL(url)), [])
+  useEffect(() => () => { objectUrlsRef.current.forEach(url => URL.revokeObjectURL(url)); objectUrlsRef.current.clear() }, [])
 
   const commit = (next: Partial<Settings>, nextLayers = layers) => { adjustmentActiveRef.current = false; setHistory(value => [...value.slice(-30), { settings, layers }]); setFuture([]); setSettings(value => ({ ...value, ...next })); if (nextLayers !== layers) setLayers(nextLayers) }
   const undo = () => { adjustmentActiveRef.current = false; const last = history.at(-1); if (!last) return; setFuture(value => [{ settings, layers }, ...value]); setHistory(value => value.slice(0, -1)); setSettings(last.settings); setLayers(last.layers) }
@@ -62,11 +62,31 @@ function App() {
   const changeZoom = (amount: number) => setSettings(current => ({ ...current, zoom: Math.max(20, Math.min(300, current.zoom + amount)) }))
   const resetView = () => { setSettings(current => ({ ...current, zoom: 100 })); setViewResetToken(value => value + 1) }
   const resetPhotoEdits = () => { commit(photoDefaults); setBefore(false); setViewResetToken(value => value + 1) }
-  const createMediaUrl = (file: File) => { const url = URL.createObjectURL(file); objectUrlsRef.current.push(url); return url }
-  const importFiles = (files: FileList | null) => { if (!files) return; const allowed = Array.from(files).filter(file => supportedImageTypes.has(file.type) || file.type === 'video/mp4' || file.type === 'video/webm'); if (!allowed.length) { setToast('Choose a JPG, JPEG, PNG, WebP, GIF, SVG, MP4, or WebM file.'); return }; const items: Media[] = allowed.map(file => ({ id: crypto.randomUUID(), name: file.name, kind: file.type.startsWith('video/') ? 'video' : 'image', url: createMediaUrl(file), file })); setMedia(value => [...value, ...items]); setSelectedId(items[0].id); setLayers(value => [...items.map(item => ({ id: crypto.randomUUID(), name: item.name, type: 'Media' as const, visible: true, locked: false, opacity: 100 })), ...value]); setToast(`${items.length} media file${items.length > 1 ? 's' : ''} imported`) }
-  const onFileInputChange = (event: ChangeEvent<HTMLInputElement>) => { importFiles(event.currentTarget.files); event.currentTarget.value = '' }
+  const createMediaUrl = (file: File) => { const url = URL.createObjectURL(file); objectUrlsRef.current.add(url); return url }
+  const releaseMediaUrl = (url: string) => { URL.revokeObjectURL(url); objectUrlsRef.current.delete(url) }
+  const readImageDimensions = async (file: File, url: string) => {
+    if (typeof createImageBitmap === 'function') {
+      try { const bitmap = await createImageBitmap(file); const size = { width: bitmap.width, height: bitmap.height }; bitmap.close(); return size } catch { /* Fall back to HTMLImageElement decoding below. */ }
+    }
+    return new Promise<{ width: number; height: number }>((resolve, reject) => { const image = new Image(); image.decoding = 'async'; image.onload = () => resolve({ width: image.naturalWidth, height: image.naturalHeight }); image.onerror = () => reject(new Error(`${file.name} could not be decoded as an image.`)); image.src = url })
+  }
+  const importFiles = async (files: FileList | null) => {
+    if (!files) return
+    const allowed = Array.from(files).filter(file => supportedImageTypes.has(file.type) || file.type === 'video/mp4' || file.type === 'video/webm')
+    if (!allowed.length) { setToast('Choose a JPG, JPEG, PNG, WebP, GIF, SVG, MP4, or WebM file.'); return }
+    const imported = await Promise.all(allowed.map(async (file): Promise<Media | null> => {
+      const url = createMediaUrl(file)
+      if (file.type.startsWith('video/')) return { id: crypto.randomUUID(), name: file.name, kind: 'video', url, file }
+      try { const size = await readImageDimensions(file, url); return { id: crypto.randomUUID(), name: file.name, kind: 'image', url, file, ...size } }
+      catch { releaseMediaUrl(url); return null }
+    }))
+    const items = imported.filter((item): item is Media => item !== null)
+    if (!items.length) { setToast('The selected image could not be decoded.'); return }
+    setMedia(value => [...value, ...items]); setSelectedId(items[0].id); setLayers(value => [...items.map(item => ({ id: crypto.randomUUID(), name: item.name, type: 'Media' as const, visible: true, locked: false, opacity: 100 })), ...value]); setToast(`${items.length} media file${items.length > 1 ? 's' : ''} imported`)
+  }
+  const onFileInputChange = (event: ChangeEvent<HTMLInputElement>) => { void importFiles(event.currentTarget.files); event.currentTarget.value = '' }
   const updateMediaDimensions = (id: string, width: number, height: number) => setMedia(items => { const active = items.find(item => item.id === id); if (!active || active.width === width && active.height === height) return items; return items.map(item => item.id === id ? { ...item, width, height } : item) })
-  const onDrop = (event: DragEvent) => { event.preventDefault(); importFiles(event.dataTransfer.files) }
+  const onDrop = (event: DragEvent) => { event.preventDefault(); void importFiles(event.dataTransfer.files) }
   const persistProject = async () => { setSaving(true); try { await saveProject({ id: 'active-project', name: 'Campaign 2025', updatedAt: Date.now(), settings: { settings, layers, assets: media.map(item => ({ name: item.name, kind: item.kind })) } }); setSaved(value => ['Campaign 2025', ...value.filter(item => item !== 'Campaign 2025')]); setToast('Project metadata saved locally') } catch { setToast('Local storage is unavailable in this browser.') } finally { setSaving(false) } }
   const togglePlayback = () => { const video = videoRef.current; if (!video) return; if (video.paused) { void video.play().then(() => setIsPlaying(true)).catch(() => { setIsPlaying(false); setToast('The browser could not start video playback.') }) } else { video.pause(); setIsPlaying(false) } }
   const addText = () => { const layer = { id: crypto.randomUUID(), name: 'Title text', type: 'Text' as const, visible: true, locked: false, opacity: 100, text: 'NOVA TITLE' }; setHistory(value => [...value, { settings, layers }]); setLayers(value => [layer, ...value]); setToast('Editable text layer added.') }
