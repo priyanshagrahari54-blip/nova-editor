@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Activity, Bot, CheckCircle2, CircleDot, Clock3, GitBranch, GitPullRequest, Play, RefreshCw, Rocket, Settings2, ShieldCheck, Sparkles, Wand2, X, Zap } from 'lucide-react'
+import { Activity, Bot, CheckCircle2, CircleDot, Clock3, GitBranch, GitPullRequest, Play, RefreshCw, Settings2, ShieldCheck, Sparkles, Wand2, X, Zap } from 'lucide-react'
 import { loadIssues, saveIssues } from '../lib/localDb'
 
 type Issue = { id: number; title: string; label: string; priority: 'Critical' | 'High' | 'Normal'; status: 'Open' | 'Fixed' }
