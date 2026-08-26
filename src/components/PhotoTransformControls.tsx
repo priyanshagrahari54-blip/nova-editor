@@ -7,6 +7,7 @@ type Props = {
   cropMode: boolean
   cropAspect: CropAspect
   rotation: number
+  onRotate180: () => void
   onToggleCrop: () => void
   onApplyCrop: () => void
   onCancelCrop: () => void
@@ -20,10 +21,11 @@ type Props = {
   onResetAll: () => void
 }
 
-export function PhotoTransformControls({ cropMode, cropAspect, rotation, onToggleCrop, onApplyCrop, onCancelCrop, onAspectChange, onResetCrop, onRotationStart, onRotationChange, onRotationEnd, onResetAdjustments, onResetTransform, onResetAll }: Props) {
+export function PhotoTransformControls({ cropMode, cropAspect, rotation, onRotate180, onToggleCrop, onApplyCrop, onCancelCrop, onAspectChange, onResetCrop, onRotationStart, onRotationChange, onRotationEnd, onResetAdjustments, onResetTransform, onResetAll }: Props) {
   const finishRotation = (element: HTMLInputElement) => { onRotationEnd(); element.blur() }
   return <div className="photo-transform-tools">
     <div className="photo-transform-buttons">
+      <button onClick={onRotate180}><RotateCcw size={13}/> Rotate 180°</button>
       <button className={cropMode ? 'active' : ''} onClick={onToggleCrop}><Crop size={13}/>{cropMode ? 'Editing crop' : 'Crop'}</button>
       <button onClick={onResetTransform}><Maximize2 size={13}/> Reset transform</button>
       <button onClick={onResetAdjustments}><SlidersHorizontal size={13}/> Reset adjustments</button>

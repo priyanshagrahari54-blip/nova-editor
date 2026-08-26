@@ -19,6 +19,8 @@ export const cropSettings = (rect: CropRect): Partial<EditorSettings> => ({
   cropHeight: rect.height,
 })
 
+export const cropRectsEqual = (left: CropRect, right: CropRect, epsilon = .000001) => Math.abs(left.x - right.x) < epsilon && Math.abs(left.y - right.y) < epsilon && Math.abs(left.width - right.width) < epsilon && Math.abs(left.height - right.height) < epsilon
+
 export function normalizedRotation(value: number) {
   return ((value % 360) + 360) % 360
 }
