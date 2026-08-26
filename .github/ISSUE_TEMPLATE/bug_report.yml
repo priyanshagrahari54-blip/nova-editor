@@ -1,0 +1,73 @@
+name: Bug report
+description: Report a reproducible problem in Nova Studio
+title: "[Bug]: "
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for helping improve Nova Studio. Please share enough detail for us to reproduce and fix the problem.
+  - type: input
+    id: summary
+    attributes:
+      label: Short summary
+      description: What went wrong?
+      placeholder: Export button does not download a PNG file
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Steps to reproduce
+      description: List the exact steps that trigger the issue.
+      placeholder: |
+        1. Open a project
+        2. Import a JPG
+        3. Choose PNG in Export
+        4. Click Render & download
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+      description: What should have happened?
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+      description: What happened instead? Include an error message if one appeared.
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Affected area
+      options:
+        - Editor canvas
+        - Media import
+        - Image export
+        - Video workflow
+        - AI tools
+        - Automation engine
+        - Mobile experience
+        - Authentication or storage
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: Browser, operating system, device type, and app version.
+      placeholder: Chrome 123 on Windows 11 desktop
+    validations:
+      required: true
+  - type: textarea
+    id: media
+    attributes:
+      label: Screenshots, recordings, or logs
+      description: Drag and drop supporting files here. Never include passwords, tokens, or private media.
