@@ -9,18 +9,28 @@ type Props = { asset: Asset | null; settings: EditorSettings; layers: EditorLaye
 type CaptureVideo = HTMLVideoElement & { captureStream?: () => MediaStream; mozCaptureStream?: () => MediaStream }
 
 function editorFilter(settings: EditorSettings) {
-  const brightness = Math.max(0, settings.brightness + settings.exposure + settings.lift * .35 + settings.gamma * .2)
-  const contrast = Math.max(0, settings.contrast + settings.sharpness / 3 + settings.highlights / 3 - settings.shadows / 4 + settings.gain * .4 - settings.fade * .22)
-  return `brightness(${brightness}%) contrast(${contrast}%) saturate(${settings.saturation}%) sepia(${Math.max(0, settings.temperature) / 500}) hue-rotate(${settings.tint / 3 + settings.hue}deg) blur(${settings.blur}px)`
+  const brightness = Math.max(0, settings.brightness + settings.exposure + settings.highlights * .06 + settings.shadows * .1 + settings.lift * .35 + settings.gamma * .2)
+  const contrast = Math.max(0, settings.contrast + settings.sharpness / 3 + settings.highlights * .18 - settings.shadows * .14 + settings.gain * .4 - settings.fade * .22)
+  return `brightness(${brightness}%) contrast(${contrast}%) saturate(${settings.saturation}%) sepia(${Math.abs(settings.temperature) / 900}) hue-rotate(${settings.tint / 4 + settings.hue}deg) blur(${settings.blur}px)`
 }
 
-function targetSize(width: number, height: number, resolution: Resolution) {
-  if (resolution === 'source') return { width, height }
+function normalizedRotation(value: number) {
+  return ((value % 360) + 360) % 360
+}
+
+function targetSize(width: number, height: number, resolution: Resolution, settings: EditorSettings) {
+  const cropScale = Math.max(.01, 1 - settings.crop / 50)
+  const croppedWidth = Math.max(1, Math.round(width * cropScale)); const croppedHeight = Math.max(1, Math.round(height * cropScale))
+  const quarterTurn = normalizedRotation(settings.rotate) === 90 || normalizedRotation(settings.rotate) === 270
+  const outputWidth = quarterTurn ? croppedHeight : croppedWidth; const outputHeight = quarterTurn ? croppedWidth : croppedHeight
+  if (resolution === 'source') return { width: outputWidth, height: outputHeight }
   const targetHeight = resolution === '2160' ? 2160 : 1080
-  return { width: Math.round(targetHeight * width / height), height: targetHeight }
+  return { width: Math.round(targetHeight * outputWidth / outputHeight), height: targetHeight }
 }
 
 function drawFinishing(context: CanvasRenderingContext2D, width: number, height: number, settings: EditorSettings, layers: EditorLayer[], frame = 0) {
+  if (settings.temperature !== 0) { context.save(); context.globalCompositeOperation = 'soft-light'; context.globalAlpha = Math.abs(settings.temperature) / 240; context.fillStyle = settings.temperature > 0 ? '#ff8a3d' : '#4d78ff'; context.fillRect(0, 0, width, height); context.restore() }
+  if (settings.tint !== 0) { context.save(); context.globalCompositeOperation = 'soft-light'; context.globalAlpha = Math.abs(settings.tint) / 270; context.fillStyle = settings.tint > 0 ? '#d85adf' : '#42c88a'; context.fillRect(0, 0, width, height); context.restore() }
   if (settings.fade > 0) { context.save(); context.globalAlpha = settings.fade / 350; context.fillStyle = '#a49a8d'; context.fillRect(0, 0, width, height); context.restore() }
   if (settings.vignette > 0) {
     const gradient = context.createRadialGradient(width / 2, height / 2, Math.min(width, height) * .18, width / 2, height / 2, Math.max(width, height) * .72)
@@ -40,9 +50,11 @@ function drawFinishing(context: CanvasRenderingContext2D, width: number, height:
 function drawSource(context: CanvasRenderingContext2D, source: CanvasImageSource, sourceWidth: number, sourceHeight: number, width: number, height: number, settings: EditorSettings) {
   const crop = settings.crop / 100
   const sx = sourceWidth * crop; const sy = sourceHeight * crop; const sw = Math.max(1, sourceWidth - sx * 2); const sh = Math.max(1, sourceHeight - sy * 2)
-  context.save(); context.clearRect(0, 0, width, height); context.filter = editorFilter(settings); context.translate(width / 2, height / 2); context.rotate(settings.rotate * Math.PI / 180); context.scale(settings.flip ? -1 : 1, settings.flipVertical ? -1 : 1)
-  if (settings.glow > 0) { context.save(); context.globalAlpha = settings.glow / 90; context.filter = `${editorFilter(settings)} blur(${settings.glow / 2}px)`; context.globalCompositeOperation = 'screen'; context.drawImage(source, sx, sy, sw, sh, -width / 2, -height / 2, width, height); context.restore() }
-  context.drawImage(source, sx, sy, sw, sh, -width / 2, -height / 2, width, height); context.restore()
+  const rotation = normalizedRotation(settings.rotate); const quarterTurn = rotation === 90 || rotation === 270
+  const drawWidth = quarterTurn ? height : width; const drawHeight = quarterTurn ? width : height
+  context.save(); context.clearRect(0, 0, width, height); context.filter = editorFilter(settings); context.translate(width / 2, height / 2); context.rotate(rotation * Math.PI / 180); context.scale(settings.flip ? -1 : 1, settings.flipVertical ? -1 : 1)
+  if (settings.glow > 0) { context.save(); context.globalAlpha = settings.glow / 90; context.filter = `${editorFilter(settings)} blur(${settings.glow / 2}px)`; context.globalCompositeOperation = 'screen'; context.drawImage(source, sx, sy, sw, sh, -drawWidth / 2, -drawHeight / 2, drawWidth, drawHeight); context.restore() }
+  context.drawImage(source, sx, sy, sw, sh, -drawWidth / 2, -drawHeight / 2, drawWidth, drawHeight); context.restore()
 }
 
 const downloadBlob = (blob: Blob, filename: string) => { const url = URL.createObjectURL(blob); const link = document.createElement('a'); link.href = url; link.download = filename; link.click(); window.setTimeout(() => URL.revokeObjectURL(url), 1200) }
@@ -63,7 +75,7 @@ export function ExportStudio({ asset, settings, layers, onClose, onNotice }: Pro
     if (!asset) return
     const image = new Image(); image.src = asset.url
     await new Promise<void>((resolve, reject) => { image.onload = () => resolve(); image.onerror = () => reject(new Error('Image source could not be decoded.')) })
-    const size = targetSize(image.naturalWidth, image.naturalHeight, resolution)
+    const size = targetSize(image.naturalWidth, image.naturalHeight, resolution, settings)
     const canvas = document.createElement('canvas'); canvas.width = size.width; canvas.height = size.height
     const context = canvas.getContext('2d'); if (!context) throw new Error('Canvas export is unavailable.')
     setStatus('Rendering color and VFX…'); setProgress(35); drawSource(context, image, image.naturalWidth, image.naturalHeight, size.width, size.height, settings); drawFinishing(context, size.width, size.height, settings, layers)
@@ -77,7 +89,7 @@ export function ExportStudio({ asset, settings, layers, onClose, onNotice }: Pro
     if (!asset) return
     const video = document.createElement('video') as CaptureVideo; video.src = asset.url; video.preload = 'auto'; video.playsInline = true; video.crossOrigin = 'anonymous'
     await new Promise<void>((resolve, reject) => { video.onloadedmetadata = () => resolve(); video.onerror = () => reject(new Error('Video source could not be decoded.')) })
-    const size = targetSize(video.videoWidth, video.videoHeight, resolution)
+    const size = targetSize(video.videoWidth, video.videoHeight, resolution, settings)
     const canvas = document.createElement('canvas'); canvas.width = size.width; canvas.height = size.height
     const context = canvas.getContext('2d'); if (!context) throw new Error('Canvas export is unavailable.')
     const stream = canvas.captureStream(fps)
@@ -126,7 +138,7 @@ export function ExportStudio({ asset, settings, layers, onClose, onNotice }: Pro
         <div className="export-source"><i>{asset?.kind === 'video' ? <Film size={20}/> : <ImageIcon size={20}/>}</i><div><small>ACTIVE SEQUENCE</small><b>{asset?.name ?? 'No media selected'}</b><span>{asset ? `${asset.kind === 'video' ? 'Video sequence' : 'Still image'} · graded · VFX included` : 'Choose media in the project bin'}</span></div><Check size={15}/></div>
         <section><div className="export-section-title"><span>FORMAT</span><small>MASTER</small></div>{asset?.kind === 'video' ? <div className="format-choice single"><button className="active"><Film size={16}/><span><b>WebM</b><small>VP9 / Opus master</small></span><Check size={13}/></button></div> : <div className="format-choice">{(['png','jpeg','webp'] as ImageFormat[]).map(value => <button key={value} className={format === value ? 'active' : ''} onClick={() => setFormat(value)}><ImageIcon size={15}/><span><b>{value.toUpperCase()}</b><small>{value === 'png' ? 'Lossless' : value === 'jpeg' ? 'Universal' : 'Modern'}</small></span>{format === value && <Check size={12}/>}</button>)}</div>}</section>
         <section><div className="export-section-title"><span>RESOLUTION</span><small>COLOR MANAGED</small></div><div className="export-select"><select value={resolution} onChange={event => setResolution(event.target.value as Resolution)}><option value="source">Match source resolution</option><option value="1080">Full HD · 1080p</option><option value="2160">Ultra HD · 4K</option></select><ChevronDown size={14}/></div></section>
-        <section className="quality-section"><div className="export-section-title"><span>QUALITY</span><output>{quality}%</output></div><input type="range" min="45" max="100" value={quality} onChange={event => setQuality(Number(event.target.value))}/><div><span>Smaller file</span><span>Visually lossless</span></div></section>
+        {(asset?.kind === 'video' || format !== 'png') && <section className="quality-section"><div className="export-section-title"><span>QUALITY</span><output>{quality}%</output></div><input type="range" min="45" max="100" value={quality} onChange={event => setQuality(Number(event.target.value))}/><div><span>Smaller file</span><span>Visually lossless</span></div></section>}
         {asset?.kind === 'video' && <section className="video-export-options"><label><span>Frame rate</span><select value={fps} onChange={event => setFps(Number(event.target.value))}><option value="24">24 fps</option><option value="30">30 fps</option><option value="60">60 fps</option></select></label><label className="export-toggle"><span><b>Include mastered audio</b><small>256 kbps Opus</small></span><input type="checkbox" checked={includeAudio} onChange={event => setIncludeAudio(event.target.checked)}/><i/></label></section>}
       </main><aside>
         <div className="export-summary"><div><Sparkles size={14}/><b>Render summary</b></div><span><small>Container</small>{asset?.kind === 'video' ? 'WebM master' : format.toUpperCase()}</span><span><small>Resolution</small>{resolution === 'source' ? 'Source' : resolution === '2160' ? '3840 × 2160 target' : '1920 × 1080 target'}</span><span><small>Color</small>Nova grade + VFX</span><span><small>Estimated size</small>{estimate}</span></div>
