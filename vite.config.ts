@@ -3,14 +3,7 @@ import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 
 // https://vite.dev/config/
-export default defineConfig(async ({ mode }) => {
-  const plugins = [react(), tailwindcss()];
-  try {
-    // @ts-ignore
-    const m = await import('./.vite-source-tags.js');
-    plugins.push(m.sourceTags());
-  } catch {}
-
+export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), ['VITE_', 'NEXT_PUBLIC_']);
   const processEnvDefines: Record<string, string> = {};
   for (const [key, value] of Object.entries(env)) {
@@ -18,7 +11,9 @@ export default defineConfig(async ({ mode }) => {
   }
 
   return {
-    plugins,
+    // Cast keeps the config compatible when a tooling host provides Vite's
+    // type declarations from a different package location.
+    plugins: [react() as never, tailwindcss() as never],
     envPrefix: ['VITE_', 'NEXT_PUBLIC_'],
     define: processEnvDefines,
   };

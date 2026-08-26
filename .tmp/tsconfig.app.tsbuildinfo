@@ -1,1 +1,1 @@
-{"root":["../src/App.tsx","../src/main.tsx","../src/components/AuthDialog.tsx","../src/components/ReleaseEngine.tsx","../src/lib/ai.ts","../src/lib/localDb.ts","../src/lib/projectDb.ts"],"errors":true,"version":"5.9.3"}
+{"root":["../src/App.tsx","../src/main.tsx","../src/components/AuthDialog.tsx","../src/components/ReleaseEngine.tsx","../src/lib/ai.ts","../src/lib/localDb.ts","../src/lib/projectDb.ts"],"version":"5.9.3"}
