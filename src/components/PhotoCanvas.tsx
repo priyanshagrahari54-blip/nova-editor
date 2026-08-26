@@ -1,7 +1,7 @@
 import { PointerEvent, useEffect, useRef, useState } from 'react'
 import type { EditorLayer, EditorSettings } from '../App'
 
-type Props = { src: string; settings: EditorSettings; before: boolean; layers: EditorLayer[]; resetViewToken: number }
+type Props = { src: string; fileName: string; settings: EditorSettings; before: boolean; layers: EditorLayer[]; resetViewToken: number; onImageReady: (width: number, height: number) => void }
 type LoadedImage = { src: string; image: HTMLImageElement }
 
 const PREVIEW_MAX_EDGE = 1600
@@ -25,19 +25,22 @@ function drawColorCast(context: CanvasRenderingContext2D, width: number, height:
   }
 }
 
-export function PhotoCanvas({ src, settings, before, layers, resetViewToken }: Props) {
+export function PhotoCanvas({ src, fileName, settings, before, layers, resetViewToken, onImageReady }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const imageRef = useRef<LoadedImage | null>(null)
+  const imageReadyRef = useRef(onImageReady)
   const dragRef = useRef<{ x: number; y: number; left: number; top: number } | null>(null)
   const [imageRevision, setImageRevision] = useState(0)
   const [panState, setPanState] = useState({ src, resetViewToken, x: 0, y: 0 })
   const pan = panState.src === src && panState.resetViewToken === resetViewToken ? panState : { src, resetViewToken, x: 0, y: 0 }
 
+  useEffect(() => { imageReadyRef.current = onImageReady }, [onImageReady])
+
   useEffect(() => {
     let cancelled = false
     const image = new Image()
     image.decoding = 'async'
-    image.onload = () => { if (cancelled) return; imageRef.current = { src, image }; setImageRevision(value => value + 1) }
+    image.onload = () => { if (cancelled) return; imageRef.current = { src, image }; imageReadyRef.current(image.naturalWidth, image.naturalHeight); setImageRevision(value => value + 1) }
     image.src = src
     return () => { cancelled = true }
   }, [src])
@@ -93,5 +96,5 @@ export function PhotoCanvas({ src, settings, before, layers, resetViewToken }: P
   const startPan = (event: PointerEvent<HTMLCanvasElement>) => { dragRef.current = { x: event.clientX, y: event.clientY, left: pan.x, top: pan.y }; event.currentTarget.setPointerCapture(event.pointerId) }
   const movePan = (event: PointerEvent<HTMLCanvasElement>) => { const drag = dragRef.current; if (!drag) return; setPanState({ src, resetViewToken, x: drag.left + event.clientX - drag.x, y: drag.top + event.clientY - drag.y }) }
   const endPan = () => { dragRef.current = null }
-  return <canvas ref={canvasRef} className="photo-canvas" aria-label={before ? 'Original photo preview' : 'Edited photo canvas'} onPointerDown={startPan} onPointerMove={movePan} onPointerUp={endPan} onPointerCancel={endPan} style={{ transform: `translate3d(${pan.x}px, ${pan.y}px, 0) scale(${settings.zoom / 100})` }}/>
+  return <canvas ref={canvasRef} className="photo-canvas" aria-label={`${before ? 'Original preview' : 'Edited canvas'} for ${fileName}`} onPointerDown={startPan} onPointerMove={movePan} onPointerUp={endPan} onPointerCancel={endPan} style={{ transform: `translate3d(${pan.x}px, ${pan.y}px, 0) scale(${settings.zoom / 100})` }}/>
 }
