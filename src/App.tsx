@@ -53,6 +53,7 @@ function App() {
   const videoRef = useRef<HTMLVideoElement>(null)
   const objectUrlsRef = useRef(new Set<string>())
   const gestureStartRef = useRef<Snapshot | null>(null)
+  const gestureLatestSettingsRef = useRef<Settings>(settings)
   const selected = media.find(item => item.id === selectedId) ?? null
   const activeFilter = before ? 'none' : `brightness(${Math.max(0, settings.brightness + settings.exposure + settings.lift * .35 + settings.gamma * .2)}%) contrast(${Math.max(0, settings.contrast + settings.highlights / 3 - settings.shadows / 4 + settings.gain * .4 - settings.fade * .22)}%) saturate(${settings.saturation}%) sepia(${Math.max(0, settings.temperature) / 500}) hue-rotate(${settings.tint / 3 + settings.hue}deg) blur(${settings.blur}px)`
 
@@ -63,9 +64,9 @@ function App() {
   const commit = (next: Partial<Settings>, nextLayers = layers) => { gestureStartRef.current = null; setHistory(value => [...value.slice(-30), { settings, layers }]); setFuture([]); setSettings(value => ({ ...value, ...next })); if (nextLayers !== layers) setLayers(nextLayers) }
   const undo = () => { gestureStartRef.current = null; const last = history.at(-1); if (!last) return; setFuture(value => [{ settings, layers }, ...value]); setHistory(value => value.slice(0, -1)); setSettings(last.settings); setLayers(last.layers) }
   const redo = () => { gestureStartRef.current = null; const next = future[0]; if (!next) return; setHistory(value => [...value, { settings, layers }]); setFuture(value => value.slice(1)); setSettings(next.settings); setLayers(next.layers) }
-  const beginAdjustment = () => { if (!gestureStartRef.current) gestureStartRef.current = { settings, layers } }
-  const previewAdjustment = (key: AdjustmentKey, value: number) => setSettings(current => ({ ...current, [key]: value }))
-  const finishAdjustment = () => { const start = gestureStartRef.current; gestureStartRef.current = null; if (!start || sameSettings(start.settings, settings) && start.layers === layers) return; setHistory(value => [...value.slice(-30), start]); setFuture([]) }
+  const beginAdjustment = () => { if (!gestureStartRef.current) { gestureStartRef.current = { settings, layers }; gestureLatestSettingsRef.current = settings } }
+  const previewAdjustment = (key: AdjustmentKey, value: number) => setSettings(current => { const next = { ...current, [key]: value }; gestureLatestSettingsRef.current = next; return next })
+  const finishAdjustment = () => { const start = gestureStartRef.current; const latest = gestureLatestSettingsRef.current; gestureStartRef.current = null; if (!start || sameSettings(start.settings, latest) && start.layers === layers) return; setHistory(value => [...value.slice(-30), start]); setFuture([]) }
   const changeZoom = (amount: number) => setSettings(current => ({ ...current, zoom: Math.max(20, Math.min(300, current.zoom + amount)) }))
   const resetView = () => { setSettings(current => ({ ...current, zoom: 100 })); setViewResetToken(value => value + 1) }
   const resetAdjustments = () => { commit(PHOTO_ADJUSTMENT_DEFAULTS); setBefore(false) }
@@ -76,7 +77,7 @@ function App() {
   const resetTransform = () => { commit({ ...cropSettings(FULL_CROP), crop: 0, rotate: 0, flip: false, flipVertical: false }); setCropDraft(null); setCropMode(false); setCropAspect('free'); setViewResetToken(value => value + 1) }
   const resetPhotoEdits = () => { commit(photoDefaults); setBefore(false); setCropDraft(null); setCropMode(false); setCropAspect('free'); setViewResetToken(value => value + 1) }
   const previewCrop = (rect: CropRect) => setCropDraft(rect)
-  const previewRotation = (rotate: number) => setSettings(current => ({ ...current, rotate }))
+  const previewRotation = (rotate: number) => setSettings(current => { const next = { ...current, rotate }; gestureLatestSettingsRef.current = next; return next })
   const changeCropAspect = (aspect: CropAspect) => { setCropAspect(aspect); if (selected?.kind !== 'image' || !selected.width || !selected.height) return; setCropDraft(cropForAspect(cropDraft ?? cropRectFromSettings(settings), aspect, selected.width, selected.height)) }
   const createMediaUrl = (file: File) => { const url = URL.createObjectURL(file); objectUrlsRef.current.add(url); return url }
   const releaseMediaUrl = (url: string) => { URL.revokeObjectURL(url); objectUrlsRef.current.delete(url) }
