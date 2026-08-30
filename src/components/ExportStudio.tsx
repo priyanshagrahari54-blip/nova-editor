@@ -132,7 +132,7 @@ export function ExportStudio({ asset, settings, layers, onClose, onNotice }: Pro
 
   return <div className="export-backdrop" role="dialog" aria-modal="true" aria-label="Export studio">
     <section className="export-studio">
-      <header><div><span><MonitorUp size={16}/></span><div><small>DELIVER</small><b>Export master</b></div></div><button onClick={exporting ? cancel : onClose}><X size={17}/></button></header>
+      <header><div><span><MonitorUp size={16}/></span><div><small>DELIVER</small><b>Export master</b></div></div><button aria-label="Close export modal" onClick={exporting ? cancel : onClose}><X size={17}/></button></header>
       <div className="export-layout"><main>
         <div className="export-source"><i>{asset?.kind === 'video' ? <Film size={20}/> : <ImageIcon size={20}/>}</i><div><small>ACTIVE SEQUENCE</small><b>{asset?.name ?? 'No media selected'}</b><span>{asset ? `${asset.kind === 'video' ? 'Video sequence' : 'Still image'} · graded · VFX included` : 'Choose media in the project bin'}</span></div><Check size={15}/></div>
         <section><div className="export-section-title"><span>FORMAT</span><small>MASTER</small></div>{asset?.kind === 'video' ? <div className="format-choice single"><button className="active"><Film size={16}/><span><b>WebM</b><small>VP9 / Opus master</small></span><Check size={13}/></button></div> : <div className="format-choice">{(['png','jpeg','webp'] as ImageFormat[]).map(value => <button key={value} className={format === value ? 'active' : ''} onClick={() => setFormat(value)}><ImageIcon size={15}/><span><b>{value.toUpperCase()}</b><small>{value === 'png' ? 'Lossless' : value === 'jpeg' ? 'Universal' : 'Modern'}</small></span>{format === value && <Check size={12}/>}</button>)}</div>}</section>

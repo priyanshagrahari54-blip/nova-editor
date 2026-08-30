@@ -1,0 +1,3 @@
+## 2025-05-18 - Accessible Names for Complex Media Editor Icon Controls
+**Learning:** Dense media editing interfaces frequently rely on compact, icon-only control buttons (like Undo/Redo, Zoom controls, and Modal close triggers). Without explicit `aria-label` or `aria-labelledby` attributes, screen reader users only receive unhelpful notifications like "button" or icon component classnames. Dynamic controls (e.g. Play/Pause or Mute/Unmute toggle buttons) must update their `aria-label` dynamically to reflect state changes.
+**Action:** When working on toolbars and compact control panels, always inspect icon-only interactive elements and ensure dynamic state-reflecting `aria-label` attributes are applied.
