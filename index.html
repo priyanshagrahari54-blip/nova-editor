@@ -632,9 +632,11 @@ loadRrweb();
       console.warn('[element-picker] arena:set-text target not found:', path);
       return;
     }
-    if (activeEdit && activeEdit.element === el) cancelEdit();
-    if (childIndex != null && el.childNodes[childIndex]) {
-      el.childNodes[childIndex].textContent = text;
+    if (activeEdit && (activeEdit.element === el || activeEdit.sourceEl === el)) cancelEdit();
+    if (childIndex != null) {
+      if (el.childNodes[childIndex]) {
+        el.childNodes[childIndex].textContent = text;
+      }
     } else {
       el.textContent = text;
     }
