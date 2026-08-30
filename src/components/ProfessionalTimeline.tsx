@@ -44,7 +44,7 @@ export function ProfessionalTimeline({ assetName, duration, currentTime, playing
     onSeek(next)
   }
 
-  const split = () => {
+  const split = () => { if (locked) { onNotice("Track V1 is locked. Unlock to split clips."); return }
     const clip = clips.find(item => item.id === selectedClip)
     if (!clip || currentTime <= clip.start + .1 || currentTime >= clip.end - .1) { onNotice('Move the playhead inside the selected clip to split.'); return }
     const left: Clip = { ...clip, id: crypto.randomUUID(), end: currentTime, name: `${clip.name} A` }
@@ -69,7 +69,7 @@ export function ProfessionalTimeline({ assetName, duration, currentTime, playing
     setClips(items => items.map(clip => clip.id === selectedClip ? { ...clip, end: Math.max(clip.start + .2, Math.min(safeDuration, clip.end + amount)) } : clip))
   }
 
-  const remove = () => {
+  const remove = () => { if (locked) { onNotice("Track V1 is locked. Unlock to remove clips."); return }
     if (clips.length === 1) { onNotice('The primary source clip cannot be removed.'); return }
     setClips(items => items.filter(item => item.id !== selectedClip))
     setSelectedClip(clips.find(item => item.id !== selectedClip)?.id ?? '')
