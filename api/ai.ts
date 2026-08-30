@@ -75,10 +75,15 @@ export default async function handler(request: Request, response: Response) {
       body: JSON.stringify({ model, reasoning: { effort: 'high' }, max_output_tokens: 1400, input: [{ role: 'system', content: system }, { role: 'user', content: user }] }),
     })
     const result = await upstream.json() as ModelResponse
-    if (!upstream.ok) { response.status(upstream.status).json({ error: result.error?.message || 'The AI provider rejected this request.' }); return }
+    if (!upstream.ok) {
+      // Security: Do not expose raw upstream error details or API key/provider internals to clients
+      response.status(upstream.status).json({ error: 'The AI provider rejected this request.' })
+      return
+    }
     const plan = parsePlan(outputText(result))
     response.status(200).json({ model, plan: { ...plan, needsProvider: false, source: 'cloud' } })
-  } catch (error) {
-    response.status(502).json({ error: error instanceof Error ? error.message : 'Nova could not contact the AI provider.' })
+  } catch {
+    // Security: Generic error message avoids leaking stack traces or connection error details
+    response.status(502).json({ error: 'Nova could not contact the AI provider.' })
   }
 }
