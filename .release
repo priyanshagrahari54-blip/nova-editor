@@ -1,0 +1,2 @@
+#!/bin/bash
+echo "Nova Editor v1.1.0" > /tmp/release_notes.txt
