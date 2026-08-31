@@ -13,6 +13,7 @@ export default defineConfig(({ mode }) => {
   return {
     // Cast keeps the config compatible when a tooling host provides Vite's
     // type declarations from a different package location.
+    base: '/nova-editor/',
     plugins: [react() as never, tailwindcss() as never],
     envPrefix: ['VITE_', 'NEXT_PUBLIC_'],
     define: processEnvDefines,
