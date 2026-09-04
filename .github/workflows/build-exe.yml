@@ -9,15 +9,15 @@ jobs:
   build:
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v7
       
       - name: Setup Node.js
-        uses: actions/setup-node@v3
+        uses: actions/setup-node@v4
         with:
-          node-version: '18'
+          node-version: '20'
       
       - name: Install dependencies
-        run: npm install
+        run: npm ci
       
       - name: Build Vite
         run: npm run build
@@ -26,7 +26,7 @@ jobs:
         run: npm run electron-build-win
       
       - name: Upload to Release
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v2
         with:
           files: dist/Nova*.exe
         env:
