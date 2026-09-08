@@ -36,10 +36,16 @@ function drawFinishing(context: CanvasRenderingContext2D, width: number, height:
     context.save(); context.fillStyle = gradient; context.fillRect(0, 0, width, height); context.restore()
   }
   if (settings.grain > 0) {
+    // PERFORMANCE OPTIMIZATION:
+    // Batch up to 12,000 grain rectangles into a single path and issue a single context.fill() call per frame.
+    // Reduces context API dispatches from up to 12,000 per frame down to 1 dispatch during master export/rendering.
     context.save(); context.globalAlpha = settings.grain / 430; context.fillStyle = frame % 2 ? '#fff' : '#111'
     const count = Math.min(12000, Math.round(width * height / 450 * settings.grain / 30))
+    const grainSize = 1 + settings.grain / 45
     let seed = frame * 9301 + 49297
-    for (let index = 0; index < count; index += 1) { seed = (seed * 233280 + 49297) % 233280; const x = seed / 233280 * width; seed = (seed * 233280 + 49297) % 233280; const y = seed / 233280 * height; context.fillRect(x, y, 1 + settings.grain / 45, 1 + settings.grain / 45) }
+    context.beginPath()
+    for (let index = 0; index < count; index += 1) { seed = (seed * 233280 + 49297) % 233280; const x = seed / 233280 * width; seed = (seed * 233280 + 49297) % 233280; const y = seed / 233280 * height; context.rect(x, y, grainSize, grainSize) }
+    context.fill()
     context.restore()
   }
   layers.filter(layer => layer.type === 'Text' && layer.visible).forEach(layer => { context.save(); context.globalAlpha = layer.opacity / 100; context.fillStyle = '#fff'; context.shadowColor = '#000'; context.shadowBlur = 10; context.font = `800 ${Math.max(24, Math.round(width / 16))}px Inter, sans-serif`; context.fillText(layer.text || 'NOVA TITLE', width * .12, height * .85); context.restore() })
