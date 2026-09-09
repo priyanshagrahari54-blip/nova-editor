@@ -1,0 +1,3 @@
+## 2025-05-18 - Batching Canvas Path Operations vs Sequential Draw Calls
+**Learning:** Issuing thousands of individual `ctx.fillRect()` calls inside a 2D canvas render loop (such as for film grain/noise effects) creates severe driver/GPU draw call overhead per frame. Batching sub-paths with `ctx.rect()` inside `ctx.beginPath()` and executing a single `ctx.fill()` reduces canvas draw calls from thousands down to 1 per frame.
+**Action:** Always batch repeated canvas shape drawing operations into a compound path (`beginPath` + `rect`/`arc` loop + single `fill`/`stroke`) instead of calling stateful draw methods like `fillRect` or `strokeRect` inside high-iteration loops.
