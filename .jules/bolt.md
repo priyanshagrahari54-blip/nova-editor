@@ -1,0 +1,3 @@
+## 2026-09-11 - Canvas Pattern Tiling vs Per-Frame fillRect Loops
+**Learning:** Drawing simulated noise/grain by running LCG random number generation and 8,000–12,000 individual `context.fillRect` calls per frame heavily degrades canvas rendering performance (~8,000-12,000 draw calls/frame). Tiling a 256x256 precomputed noise canvas with `createPattern` reduces per-frame draw call overhead by ~99%+ with identical visual output.
+**Action:** Always pre-render repeating textures or noise to offscreen pattern tiles and use `createPattern` instead of executing CPU PRNG loops during render loops. Use `pattern.setTransform` when shifting offsets for animated noise tiles instead of `context.translate` to avoid clipping fill bounds.

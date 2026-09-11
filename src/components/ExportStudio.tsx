@@ -1,7 +1,7 @@
 import { useMemo, useRef, useState } from 'react'
 import { Check, ChevronDown, Download, Film, Image as ImageIcon, LoaderCircle, MonitorUp, ShieldCheck, Sparkles, X } from 'lucide-react'
 import type { EditorLayer, EditorSettings } from '../App'
-import { applySelectivePhotoAdjustments, buildPhotoFilter } from '../lib/photoAdjustments'
+import { applySelectivePhotoAdjustments, buildPhotoFilter, renderGrainPattern } from '../lib/photoAdjustments'
 import { cropRectFromSettings, normalizedRotation, rotatedBounds } from '../lib/photoGeometry'
 
 type Asset = { name: string; kind: 'image' | 'video'; url: string }
@@ -35,13 +35,7 @@ function drawFinishing(context: CanvasRenderingContext2D, width: number, height:
     gradient.addColorStop(0, 'rgba(0,0,0,0)'); gradient.addColorStop(.62, 'rgba(0,0,0,0)'); gradient.addColorStop(1, `rgba(0,0,0,${Math.min(.9, settings.vignette / 105)})`)
     context.save(); context.fillStyle = gradient; context.fillRect(0, 0, width, height); context.restore()
   }
-  if (settings.grain > 0) {
-    context.save(); context.globalAlpha = settings.grain / 430; context.fillStyle = frame % 2 ? '#fff' : '#111'
-    const count = Math.min(12000, Math.round(width * height / 450 * settings.grain / 30))
-    let seed = frame * 9301 + 49297
-    for (let index = 0; index < count; index += 1) { seed = (seed * 233280 + 49297) % 233280; const x = seed / 233280 * width; seed = (seed * 233280 + 49297) % 233280; const y = seed / 233280 * height; context.fillRect(x, y, 1 + settings.grain / 45, 1 + settings.grain / 45) }
-    context.restore()
-  }
+  renderGrainPattern(context, width, height, settings.grain, frame)
   layers.filter(layer => layer.type === 'Text' && layer.visible).forEach(layer => { context.save(); context.globalAlpha = layer.opacity / 100; context.fillStyle = '#fff'; context.shadowColor = '#000'; context.shadowBlur = 10; context.font = `800 ${Math.max(24, Math.round(width / 16))}px Inter, sans-serif`; context.fillText(layer.text || 'NOVA TITLE', width * .12, height * .85); context.restore() })
 }
 

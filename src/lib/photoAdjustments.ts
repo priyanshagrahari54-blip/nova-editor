@@ -62,3 +62,57 @@ export function applySelectivePhotoAdjustments(context: CanvasRenderingContext2D
   }
   context.putImageData(frame, 0, 0)
 }
+
+// Precomputed noise pattern canvas for film grain optimization.
+// Replaces heavy 8,000–12,000 CPU fillRect calls per frame with 1 draw/fill operation.
+let cachedNoiseTile: HTMLCanvasElement | null = null
+
+function getNoiseTile(): HTMLCanvasElement {
+  if (cachedNoiseTile) return cachedNoiseTile
+  const tileSize = 256
+  const tileCanvas = document.createElement('canvas')
+  tileCanvas.width = tileSize
+  tileCanvas.height = tileSize
+  const tileCtx = tileCanvas.getContext('2d')
+  if (tileCtx) {
+    const imgData = tileCtx.createImageData(tileSize, tileSize)
+    const buf = imgData.data
+    let seed = 49297
+    for (let i = 0; i < buf.length; i += 4) {
+      seed = (seed * 233280 + 49297) % 233280
+      const val = (seed / 233280) * 255
+      buf[i] = val
+      buf[i + 1] = val
+      buf[i + 2] = val
+      buf[i + 3] = val > 128 ? 180 : 0 // high frequency noise pixels
+    }
+    tileCtx.putImageData(imgData, 0, 0)
+  }
+  cachedNoiseTile = tileCanvas
+  return tileCanvas
+}
+
+/**
+ * Applies film grain effect using precomputed pattern tiling.
+ * Eliminates thousands of individual draw calls per frame (~99% draw call reduction).
+ */
+export function renderGrainPattern(
+  context: CanvasRenderingContext2D,
+  width: number,
+  height: number,
+  grain: number,
+  frame = 0
+) {
+  if (grain <= 0) return
+  const tile = getNoiseTile()
+  const pattern = context.createPattern(tile, 'repeat')
+  if (!pattern) return
+  context.save()
+  context.globalAlpha = (grain / 430) * 0.75
+  context.fillStyle = pattern
+  if (frame % 2 === 1 && typeof pattern.setTransform === 'function') {
+    pattern.setTransform(new DOMMatrix().translate(128, 128))
+  }
+  context.fillRect(0, 0, width, height)
+  context.restore()
+}
