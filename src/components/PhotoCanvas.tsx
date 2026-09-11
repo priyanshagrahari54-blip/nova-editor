@@ -1,6 +1,6 @@
 import { PointerEvent, useEffect, useRef, useState } from 'react'
 import type { EditorLayer, EditorSettings } from '../App'
-import { applySelectivePhotoAdjustments, buildPhotoFilter } from '../lib/photoAdjustments'
+import { applySelectivePhotoAdjustments, buildPhotoFilter, renderGrainPattern } from '../lib/photoAdjustments'
 import { clampCropRect, cropForAspect, FULL_CROP, rotatedBounds, type CropAspect, type CropRect } from '../lib/photoGeometry'
 
 type Props = { src: string; fileName: string; settings: EditorSettings; before: boolean; layers: EditorLayer[]; resetViewToken: number; cropMode: boolean; cropRect: CropRect; cropAspect: CropAspect; onImageReady: (width: number, height: number) => void; onCropChange: (rect: CropRect) => void }
@@ -93,12 +93,7 @@ export function PhotoCanvas({ src, fileName, settings, before, layers, resetView
           vignette.addColorStop(0, 'rgba(0,0,0,0)'); vignette.addColorStop(.62, 'rgba(0,0,0,0)'); vignette.addColorStop(1, `rgba(0,0,0,${Math.min(.9, settings.vignette / 105)})`)
           ctx.save(); ctx.fillStyle = vignette; ctx.fillRect(0, 0, canvas.width, canvas.height); ctx.restore()
         }
-        if (settings.grain > 0) {
-          ctx.save(); ctx.globalAlpha = settings.grain / 430; ctx.fillStyle = '#fff'; let seed = 49297
-          const count = Math.min(8000, Math.round(canvas.width * canvas.height / 450 * settings.grain / 30))
-          for (let index = 0; index < count; index += 1) { seed = (seed * 233280 + 49297) % 233280; const x = seed / 233280 * canvas.width; seed = (seed * 233280 + 49297) % 233280; const y = seed / 233280 * canvas.height; ctx.fillRect(x, y, 1 + settings.grain / 45, 1 + settings.grain / 45) }
-          ctx.restore()
-        }
+        renderGrainPattern(ctx, canvas.width, canvas.height, settings.grain)
         layers.filter(layer => layer.type === 'Text' && layer.visible).forEach(layer => {
           ctx.save(); ctx.globalAlpha = layer.opacity / 100; ctx.fillStyle = '#fff'; ctx.shadowColor = '#000'; ctx.shadowBlur = 8; ctx.font = `bold ${Math.max(20, Math.round(canvas.width / 16))}px sans-serif`; ctx.fillText(layer.text || 'NOVA TITLE', canvas.width * .12, canvas.height * .85); ctx.restore()
         })
