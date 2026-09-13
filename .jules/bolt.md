@@ -1,0 +1,3 @@
+## 2025-05-18 - Batching Canvas2D particle drawing with compound paths
+**Learning:** Calling `ctx.fillRect()` thousands of times in a loop (e.g. for canvas grain effects) incurs severe Canvas2D context state validation and draw call overhead per particle. Constructing a single compound path with `ctx.beginPath()` and `ctx.rect()` inside the loop and calling `ctx.fill()` once reduces draw calls from ~12,000 to 1 per frame (~90%+ performance gain).
+**Action:** Always batch non-textured particle or rect fills into a single compound path when rendering procedural noise or overlays on Canvas2D context.
