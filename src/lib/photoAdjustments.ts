@@ -30,6 +30,65 @@ export function buildPhotoFilter(settings: EditorSettings) {
  * outside the per-pixel loop, replaces exponentiation with fast multiplications, and uses fast channel clamping.
  * Impact: ~58% reduction in execution time per frame (e.g., ~95ms down to ~40ms on 1600x1200 canvas).
  */
+/**
+ * Cached noise pattern tile generator for film grain rendering.
+ * Avoids calling `fillRect` up to 8,000-12,000 times per frame by tiling a pre-computed noise pattern.
+ */
+const noisePatternCache = new Map<string, CanvasPattern | null>()
+
+export function getGrainPattern(context: CanvasRenderingContext2D, grainSetting: number, isAlternateFrame = false): CanvasPattern | null {
+  const cacheKey = `${grainSetting}_${isAlternateFrame}`
+  const cached = noisePatternCache.get(cacheKey)
+  if (cached !== undefined) return cached
+
+  const size = 256
+  const patternCanvas = typeof document !== 'undefined' ? document.createElement('canvas') : null
+  if (!patternCanvas) return null
+
+  patternCanvas.width = size
+  patternCanvas.height = size
+  const pCtx = patternCanvas.getContext('2d')
+  if (!pCtx) return null
+
+  const imgData = pCtx.createImageData(size, size)
+  const data = imgData.data
+  const dotSize = 1 + grainSetting / 45
+  const isWhite = !isAlternateFrame
+
+  let seed = isAlternateFrame ? 9301 + 49297 : 49297
+  const count = Math.round((size * size / 450) * (grainSetting / 30))
+  const step = Math.max(1, Math.round(dotSize))
+
+  for (let index = 0; index < count; index += 1) {
+    seed = (seed * 233280 + 49297) % 233280
+    const startX = Math.floor((seed / 233280) * size)
+    seed = (seed * 233280 + 49297) % 233280
+    const startY = Math.floor((seed / 233280) * size)
+
+    for (let dy = 0; dy < step && startY + dy < size; dy += 1) {
+      for (let dx = 0; dx < step && startX + dx < size; dx += 1) {
+        const pixelIdx = ((startY + dy) * size + (startX + dx)) * 4
+        if (isWhite) {
+          data[pixelIdx] = 255
+          data[pixelIdx + 1] = 255
+          data[pixelIdx + 2] = 255
+          data[pixelIdx + 3] = 255
+        } else {
+          data[pixelIdx] = 17
+          data[pixelIdx + 1] = 17
+          data[pixelIdx + 2] = 17
+          data[pixelIdx + 3] = 255
+        }
+      }
+    }
+  }
+
+  pCtx.putImageData(imgData, 0, 0)
+  const pattern = context.createPattern(patternCanvas, 'repeat')
+  noisePatternCache.set(cacheKey, pattern)
+  return pattern
+}
+
 export function applySelectivePhotoAdjustments(context: CanvasRenderingContext2D, width: number, height: number, settings: EditorSettings) {
   if (settings.highlights === 0 && settings.shadows === 0 && settings.temperature === 0 && settings.tint === 0) return
   const frame = context.getImageData(0, 0, width, height)
