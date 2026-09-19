@@ -1,0 +1,3 @@
+## 2026-09-19 - Batching Canvas 2D particle rendering with Path2D / rect path
+**Learning:** Repeatedly calling `ctx.fillRect()` inside high-count loops (8,000+ iterations) incurs massive overhead due to individual Canvas2D draw call dispatches. Batching rectangles using `ctx.beginPath()`, `ctx.rect()`, and a single `ctx.fill()` accumulates geometry into one vector path and reduces Canvas2D draw calls by ~99.9%.
+**Action:** Always batch repeated canvas shape drawing operations with a single `beginPath()` and `fill()` or `stroke()` call rather than invoking draw commands (`fillRect`, `fillCircle`, etc.) inside per-element loops.
