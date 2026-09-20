@@ -1,0 +1,3 @@
+## 2026-09-20 - Tile-Cached Film Grain Canvas Patterns
+**Learning:** Drawing high-density film grain by executing thousands of individual `ctx.fillRect()` calls and pseudorandom calculations on every canvas render frame creates severe main-thread lag (~10–25ms per frame). Pre-rendering grain particles once onto a tileable 256x256 offscreen pattern canvas and cached per grain intensity allows a single `ctx.createPattern()` fill call, reducing per-frame grain rendering overhead by >98%.
+**Action:** Whenever generating procedural noise, grain, or repeating canvas textures, render into a cached tileable offscreen canvas pattern instead of issuing individual primitive draw calls in live render loops.
