@@ -32,6 +32,11 @@ export function ProfessionalTimeline({ assetName, duration, currentTime, playing
   const pixelsPerSecond = Math.max(12, (zoom / 100) * 38)
   const timelineWidth = Math.max(640, safeDuration * pixelsPerSecond)
   const ticks = useMemo(() => Array.from({ length: Math.ceil(safeDuration / (zoom > 140 ? 1 : zoom > 70 ? 2 : 5)) + 1 }, (_, index) => index * (zoom > 140 ? 1 : zoom > 70 ? 2 : 5)), [safeDuration, zoom])
+  // OPTIMIZATION: Memoize audio waveform bars to prevent recreating arrays, computing sine, and instantiating JSX nodes 60 times/sec during video playhead updates
+  const waveformBars = useMemo(
+    () => Array.from({ length: Math.max(20, Math.floor(safeDuration * 3)) }, (_, index) => <i key={index} style={{ height: `${22 + Math.abs(Math.sin(index * 1.7)) * 60}%` }} />),
+    [safeDuration]
+  )
 
   const seekFromPointer = (clientX: number) => {
     const element = trackRef.current
@@ -90,7 +95,7 @@ export function ProfessionalTimeline({ assetName, duration, currentTime, playing
         <div className="track-label"><b>T1</b><span>TITLES</span><Type size={10}/></div>
         <div className="pro-track title-track" style={{ width: timelineWidth }}><div className="title-clip" style={{ left: pixelsPerSecond * .5, width: Math.min(180, timelineWidth * .32) }}><Type size={10}/> Graphics / titles</div><div className="timeline-playhead ghost" style={{ left: currentTime * pixelsPerSecond }}/></div>
         <div className="track-label"><b>A1</b><span>AUDIO</span><button onClick={() => setMuted(value => !value)}>{muted ? <VolumeX size={10}/> : <Volume2 size={10}/>}</button></div>
-        <div className="pro-track audio-pro-track" style={{ width: timelineWidth }}><div className={`audio-pro-clip ${muted ? 'muted' : ''}`} style={{ width: safeDuration * pixelsPerSecond }}><Music2 size={11}/><span>{Array.from({ length: Math.max(20, Math.floor(safeDuration * 3)) }, (_, index) => <i key={index} style={{ height: `${22 + Math.abs(Math.sin(index * 1.7)) * 60}%` }}/>)}</span></div><div className="timeline-playhead ghost" style={{ left: currentTime * pixelsPerSecond }}/></div>
+        <div className="pro-track audio-pro-track" style={{ width: timelineWidth }}><div className={`audio-pro-clip ${muted ? 'muted' : ''}`} style={{ width: safeDuration * pixelsPerSecond }}><Music2 size={11}/><span>{waveformBars}</span></div><div className="timeline-playhead ghost" style={{ left: currentTime * pixelsPerSecond }}/></div>
       </div>
     </div>
   </section>
