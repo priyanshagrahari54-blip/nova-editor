@@ -30,6 +30,61 @@ export function buildPhotoFilter(settings: EditorSettings) {
  * outside the per-pixel loop, replaces exponentiation with fast multiplications, and uses fast channel clamping.
  * Impact: ~58% reduction in execution time per frame (e.g., ~95ms down to ~40ms on 1600x1200 canvas).
  */
+/**
+ * PERFORMANCE OPTIMIZATION:
+ * Replaces thousand-iteration per-frame fillRect loop (up to 12,000 draw calls) with a repeating offscreen pattern tile.
+ * The pattern is generated once per grain value / frame seed and cached, reducing draw operations per frame from O(N_dots) to O(1).
+ */
+const grainPatternCache = new Map<string, CanvasPattern>()
+
+export function applyGrainOverlay(
+  ctx: CanvasRenderingContext2D,
+  width: number,
+  height: number,
+  grain: number,
+  frame = 0,
+  color = '#fff'
+) {
+  if (grain <= 0) return
+  const key = `${grain}_${frame}_${color}`
+  let pattern = grainPatternCache.get(key)
+
+  if (!pattern) {
+    const tileSize = 256
+    const offscreen = document.createElement('canvas')
+    offscreen.width = tileSize
+    offscreen.height = tileSize
+    const offCtx = offscreen.getContext('2d')
+    if (offCtx) {
+      offCtx.fillStyle = color
+      const count = Math.round((tileSize * tileSize) / 450 * (grain / 30))
+      let seed = (frame * 9301 + 49297) % 233280
+      const dotSize = 1 + grain / 45
+      for (let index = 0; index < count; index += 1) {
+        seed = (seed * 233280 + 49297) % 233280
+        const x = (seed / 233280) * tileSize
+        seed = (seed * 233280 + 49297) % 233280
+        const y = (seed / 233280) * tileSize
+        offCtx.fillRect(x, y, dotSize, dotSize)
+      }
+      const created = ctx.createPattern(offscreen, 'repeat')
+      if (created) {
+        pattern = created
+        if (grainPatternCache.size > 20) grainPatternCache.clear()
+        grainPatternCache.set(key, pattern)
+      }
+    }
+  }
+
+  if (pattern) {
+    ctx.save()
+    ctx.globalAlpha = grain / 430
+    ctx.fillStyle = pattern
+    ctx.fillRect(0, 0, width, height)
+    ctx.restore()
+  }
+}
+
 export function applySelectivePhotoAdjustments(context: CanvasRenderingContext2D, width: number, height: number, settings: EditorSettings) {
   if (settings.highlights === 0 && settings.shadows === 0 && settings.temperature === 0 && settings.tint === 0) return
   const frame = context.getImageData(0, 0, width, height)
