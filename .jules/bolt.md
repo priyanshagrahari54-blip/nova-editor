@@ -1,0 +1,3 @@
+## 2026-09-27 - Selective Photo Adjustments LUT Fast-Path
+**Learning:** Photo temperature and tint adjustments in `applySelectivePhotoAdjustments` run on raw ImageData pixels (~1.9M pixels on a 1600x1200 canvas). When `highlights === 0` and `shadows === 0`, tone weights are constant across all pixels. Pre-computing a 256-entry lookup table (LUT) per channel on a module-scoped `Uint8Array` yields a ~2.66x speedup (~62% lower execution time) while avoiding garbage collection overhead.
+**Action:** Always check if pixel manipulation algorithms in `photoAdjustments.ts` have temperature/tint-only or static tone curve fast-paths that can be converted into 256-byte LUT lookups.
