@@ -94,9 +94,16 @@ export function PhotoCanvas({ src, fileName, settings, before, layers, resetView
           ctx.save(); ctx.fillStyle = vignette; ctx.fillRect(0, 0, canvas.width, canvas.height); ctx.restore()
         }
         if (settings.grain > 0) {
+          // PERFORMANCE OPTIMIZATION:
+          // Pre-computes loop invariants (particleSize) outside the per-particle loop and
+          // batches thousands of grain particle subpaths using ctx.beginPath() / ctx.rect() / ctx.fill()
+          // into a single draw call instead of executing up to 8,000 separate ctx.fillRect() host calls per frame.
           ctx.save(); ctx.globalAlpha = settings.grain / 430; ctx.fillStyle = '#fff'; let seed = 49297
           const count = Math.min(8000, Math.round(canvas.width * canvas.height / 450 * settings.grain / 30))
-          for (let index = 0; index < count; index += 1) { seed = (seed * 233280 + 49297) % 233280; const x = seed / 233280 * canvas.width; seed = (seed * 233280 + 49297) % 233280; const y = seed / 233280 * canvas.height; ctx.fillRect(x, y, 1 + settings.grain / 45, 1 + settings.grain / 45) }
+          const particleSize = 1 + settings.grain / 45
+          ctx.beginPath()
+          for (let index = 0; index < count; index += 1) { seed = (seed * 233280 + 49297) % 233280; const x = seed / 233280 * canvas.width; seed = (seed * 233280 + 49297) % 233280; const y = seed / 233280 * canvas.height; ctx.rect(x, y, particleSize, particleSize) }
+          ctx.fill()
           ctx.restore()
         }
         layers.filter(layer => layer.type === 'Text' && layer.visible).forEach(layer => {

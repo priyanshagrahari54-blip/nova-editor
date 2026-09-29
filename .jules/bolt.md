@@ -1,0 +1,3 @@
+## 2025-09-29 - Canvas 2D Path Batching & Inline Waveform Memoization
+**Learning:** In canvas rendering effects (e.g. film grain), calling `ctx.fillRect()` inside particle loops executes thousands of individual canvas API calls per frame. Batching subpaths with `ctx.beginPath()`, `ctx.rect()`, and a single `ctx.fill()` reduces host overhead dramatically. Additionally, inline JSX array generation with trig calculations inside active playhead playback loops re-allocates VNodes 30-60 times/sec unless memoized.
+**Action:** Always batch canvas particle drawing commands into single paths and memoize static visual timeline elements across playback updates.
