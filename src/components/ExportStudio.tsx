@@ -39,7 +39,10 @@ function drawFinishing(context: CanvasRenderingContext2D, width: number, height:
     context.save(); context.globalAlpha = settings.grain / 430; context.fillStyle = frame % 2 ? '#fff' : '#111'
     const count = Math.min(12000, Math.round(width * height / 450 * settings.grain / 30))
     let seed = frame * 9301 + 49297
-    for (let index = 0; index < count; index += 1) { seed = (seed * 233280 + 49297) % 233280; const x = seed / 233280 * width; seed = (seed * 233280 + 49297) % 233280; const y = seed / 233280 * height; context.fillRect(x, y, 1 + settings.grain / 45, 1 + settings.grain / 45) }
+    // Pre-compute grain particle dimension and reciprocal factor to avoid per-particle math in tight loop
+    const grainSize = 1 + settings.grain / 45
+    const inv233280 = 1 / 233280
+    for (let index = 0; index < count; index += 1) { seed = (seed * 233280 + 49297) % 233280; const x = seed * inv233280 * width; seed = (seed * 233280 + 49297) % 233280; const y = seed * inv233280 * height; context.fillRect(x, y, grainSize, grainSize) }
     context.restore()
   }
   layers.filter(layer => layer.type === 'Text' && layer.visible).forEach(layer => { context.save(); context.globalAlpha = layer.opacity / 100; context.fillStyle = '#fff'; context.shadowColor = '#000'; context.shadowBlur = 10; context.font = `800 ${Math.max(24, Math.round(width / 16))}px Inter, sans-serif`; context.fillText(layer.text || 'NOVA TITLE', width * .12, height * .85); context.restore() })
