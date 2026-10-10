@@ -1,0 +1,3 @@
+## 2026-10-10 - Timeline Waveform Audio Bars Memoization
+**Learning:** High-frequency timeline timeupdate events (30-60 fps) trigger re-renders of timeline components. Generating DOM/JSX nodes (such as waveform audio bars) inline within component renders causes high allocation rates, trigonometric calculations (`Math.sin`), and unnecessary garbage collection pressure per frame.
+**Action:** Always wrap duration-based decorative or static JSX elements (like timeline ticks or waveform bars) in `useMemo` keyed on duration/zoom rather than leaving them inline inside high-frequency playback component renders.
