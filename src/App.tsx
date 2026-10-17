@@ -139,7 +139,13 @@ function App() {
     }))
     const items = imported.filter((item): item is Media => item !== null)
     if (!items.length) { setToast('The selected image could not be decoded.'); return }
-    setMedia(value => [...value, ...items]); setSelectedId(items[0].id); setLayers(value => [...items.map(item => ({ id: crypto.randomUUID(), name: item.name, type: 'Media' as const, visible: true, locked: false, opacity: 100 })), ...value]); setToast(`${items.length} media file${items.length > 1 ? 's' : ''} imported`)
+    const nextLayers = [...items.map(item => ({ id: crypto.randomUUID(), name: item.name, type: 'Media' as const, visible: true, locked: false, opacity: 100 })), ...layers]
+    setMedia(value => [...value, ...items])
+    setSelectedId(items[0].id)
+    setLayers(nextLayers)
+    historyManagerRef.current?.reset({ settings, layers: nextLayers })
+    refreshHistory(value => value + 1)
+    setToast(`${items.length} media file${items.length > 1 ? 's' : ''} imported`)
   }
   const onFileInputChange = (event: ChangeEvent<HTMLInputElement>) => { void importFiles(event.currentTarget.files); event.currentTarget.value = '' }
   const updateMediaDimensions = (id: string, width: number, height: number) => setMedia(items => { const active = items.find(item => item.id === id); if (!active || active.width === width && active.height === height) return items; return items.map(item => item.id === id ? { ...item, width, height } : item) })
