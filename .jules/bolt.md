@@ -1,0 +1,3 @@
+## 2026-10-17 - 16-bit Luminance LUT for Pixel Adjustments
+**Learning:** In canvas raw pixel manipulation (`CanvasRenderingContext2D.getImageData`), per-pixel color operations that depend on combined luminance (`red * 54 + green * 183 + blue * 19`) have a strictly bounded integer domain `[0, 65280]`. Pre-computing tone deltas in a pre-allocated 65,281-element `Float32Array` LUT outside the pixel loop avoids repeated floating point math and divisions across millions of pixels.
+**Action:** When performing luminance-based pixel adjustments on `Uint8ClampedArray` pixel data, check if integer luminance coefficients can map directly to a static Float32Array LUT.
