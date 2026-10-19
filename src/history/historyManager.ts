@@ -41,7 +41,7 @@ export class HistoryManager<T> {
     this.maxEntries = Math.max(1, Math.floor(options.maxEntries ?? 100))
   }
 
-  private clone(value: T): T {
+  private clone<U>(value: U): U {
     return structuredClone(value)
   }
 
