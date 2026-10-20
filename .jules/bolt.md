@@ -1,0 +1,3 @@
+## 2026-10-20 - Batching Canvas Path Rectangles & Playhead Timeline Memoization
+**Learning:** In canvas rendering (`PhotoCanvas`, `ExportStudio`), issuing thousands of `fillRect()` calls per frame creates massive Canvas API context overhead (~8,000-12,000 draw calls/frame). Batching with `beginPath()`, looping `rect()`, and a single `fill()` reduces draw calls to 1 per frame. Additionally, components that update at 60 FPS on playhead scrub (`currentTime` prop in `ProfessionalTimeline`) re-evaluate inline arrays and Math functions on every frame unless React lists (`audioWaveformBars`) are memoized with `useMemo`.
+**Action:** Always batch Canvas 2D paths when drawing repeating particles/grain noise, and memoize track/waveform arrays in high-frequency playhead components.
