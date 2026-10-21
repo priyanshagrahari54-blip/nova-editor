@@ -1,0 +1,3 @@
+## 2026-10-21 - Canvas ImageData pixel loop lookup table and native clamping
+**Learning:** In canvas image processing loops over Uint8ClampedArray pixel buffers, weighted RGB luminance sums can be mapped to integer indices (e.g. 0 to 65280). Precomputing non-linear calculations (like shadow/highlight tone curves) into a module-level Float32Array lookup table combined with relying on Uint8ClampedArray's native clamping removes per-pixel float divisions and helper function call overhead, yielding a ~33% speedup (~34ms down to ~22ms for 10 frames on 1600x1200 image).
+**Action:** For hot canvas per-pixel loops operating on standard 8-bit RGB channels, evaluate using discrete precomputed LUTs for per-pixel factors and direct assignment to Uint8ClampedArray.
