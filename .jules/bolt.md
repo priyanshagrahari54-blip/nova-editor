@@ -1,0 +1,3 @@
+## 2026-10-22 - Precomputed Tone LUT & Uint32Array Canvas Adjustments
+**Learning:** In 2D canvas pixel adjustments operating on raw ImageData, precomputing a Float32Array lookup table for channel weighted sums (0..65280) eliminates floating-point math inside per-pixel loops, and processing ImageData via 32-bit Uint32Array view significantly reduces byte indexing overhead. Additionally, batching canvas particle drawings (like film grain) using `beginPath()` + `rect()` + `fill()` instead of repeated `fillRect()` calls avoids thousands of redundant canvas state draw calls.
+**Action:** Use lookup tables and 32-bit Uint32Array views for per-pixel canvas operations, and batch path operations into single `fill()` calls for particle rendering.
