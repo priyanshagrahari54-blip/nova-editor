@@ -1,0 +1,3 @@
+## 2026-10-24 - Batch Canvas Path Calls for Particle/Grain Effects
+**Learning:** Calling `ctx.fillRect()` repeatedly inside a loop thousands of times per frame (e.g. 8,000–12,000 grain particles) creates massive Canvas 2D command overhead. Batching rectangles with `ctx.beginPath()`, `ctx.rect()`, and a single `ctx.fill()` turns thousands of canvas drawing commands into a single batch fill operation.
+**Action:** When drawing multiple small primitives or particles of identical style on a HTML5 Canvas 2D context, always construct a single path with `ctx.rect()` / `ctx.moveTo()` / `ctx.lineTo()` and issue a single `fill()` / `stroke()` call.
