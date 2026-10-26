@@ -208,10 +208,8 @@ function App() {
           ...(typeof asset.height === 'number' ? { height: asset.height } : {}),
         })
       }
-      setMedia(current => {
-        current.forEach(item => releaseMediaUrl(item.url))
-        return restoredMedia
-      })
+      media.forEach(item => releaseMediaUrl(item.url))
+      setMedia(restoredMedia)
       setSettings(nextSettings)
       setLayers(nextLayers)
       setSelectedId(restoredMedia[0]?.id ?? null)
