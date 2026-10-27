@@ -188,7 +188,7 @@ function App() {
       const payload = project.settings as {
         settings?: Partial<Settings>
         layers?: Layer[]
-        assets?: Array<{ id?: string; name: string; kind: string; file?: File; width?: number; height?: number }>
+        assets?: Array<{ id?: string; name: string; kind: string; file?: Blob; width?: number; height?: number }>
       }
       const nextSettings = { ...defaults, ...(payload.settings ?? {}) }
       const nextLayers = Array.isArray(payload.layers) ? payload.layers : []
