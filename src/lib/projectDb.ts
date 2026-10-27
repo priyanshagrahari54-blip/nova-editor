@@ -28,3 +28,12 @@ export async function recentProjects() {
     request.onerror = () => reject(request.error)
   })
 }
+
+export async function loadProject(id: string): Promise<SavedProject | null> {
+  const db = await database()
+  return new Promise<SavedProject | null>((resolve, reject) => {
+    const request = db.transaction(STORE, 'readonly').objectStore(STORE).get(id)
+    request.onsuccess = () => resolve((request.result as SavedProject | undefined) ?? null)
+    request.onerror = () => reject(request.error)
+  })
+}
