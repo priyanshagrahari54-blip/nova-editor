@@ -182,30 +182,35 @@ function App() {
   }
   const loadSavedProject = async () => {
     setSaving(true)
+    const createdUrls: string[] = []
     try {
       const project = await loadProject('active-project')
       if (!project) { setToast('No saved project was found on this device.'); return }
       const payload = project.settings as {
         settings?: Partial<Settings>
         layers?: Layer[]
-        assets?: Array<{ id?: string; name: string; kind: string; file?: Blob; width?: number; height?: number }>
+        assets?: Array<{ id?: string; name?: string; kind?: string; file?: Blob; width?: number; height?: number }>
       }
       const nextSettings = { ...defaults, ...(payload.settings ?? {}) }
       const nextLayers = Array.isArray(payload.layers) ? payload.layers : []
       const restoredMedia: Media[] = []
       for (const asset of Array.isArray(payload.assets) ? payload.assets : []) {
-        if (!(asset.file instanceof Blob) || !['image', 'video'].includes(asset.kind)) continue
+        if (typeof asset.name !== 'string' || !asset.name.trim() ||
+            !(asset.file instanceof Blob) || !['image', 'video'].includes(asset.kind ?? '')) continue
+        const kind = asset.kind as Media['kind']
         const file = asset.file instanceof File
           ? asset.file
-          : new File([asset.file], asset.name, { type: asset.file.type || (asset.kind === 'image' ? 'image/jpeg' : 'video/mp4') })
+          : new File([asset.file], asset.name, { type: asset.file.type || (kind === 'image' ? 'image/jpeg' : 'video/mp4') })
+        const url = createMediaUrl(file)
+        createdUrls.push(url)
         restoredMedia.push({
-          id: asset.id || crypto.randomUUID(),
+          id: typeof asset.id === 'string' && asset.id ? asset.id : crypto.randomUUID(),
           name: asset.name,
-          kind: asset.kind as Media['kind'],
-          url: createMediaUrl(file),
+          kind,
+          url,
           file,
-          ...(typeof asset.width === 'number' ? { width: asset.width } : {}),
-          ...(typeof asset.height === 'number' ? { height: asset.height } : {}),
+          ...(typeof asset.width === 'number' && Number.isFinite(asset.width) && asset.width > 0 ? { width: asset.width } : {}),
+          ...(typeof asset.height === 'number' && Number.isFinite(asset.height) && asset.height > 0 ? { height: asset.height } : {}),
         })
       }
       media.forEach(item => releaseMediaUrl(item.url))
@@ -221,6 +226,7 @@ function App() {
         ? `Project restored with ${restoredMedia.length} media file${restoredMedia.length === 1 ? '' : 's'}.`
         : 'Project settings and layers restored; no saved media files were available.')
     } catch {
+      createdUrls.forEach(url => releaseMediaUrl(url))
       setToast('Could not load the saved project from local storage.')
     } finally {
       setSaving(false)
