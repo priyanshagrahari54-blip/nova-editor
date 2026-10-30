@@ -1,0 +1,3 @@
+## 2025-02-23 - Batch Canvas 2D Particle Fills
+**Learning:** Calling `ctx.fillRect()` thousands of times inside `requestAnimationFrame` creates massive JS-to-Canvas draw call dispatch overhead. Batching sub-paths with `ctx.rect()` inside a `ctx.beginPath()` block and calling `ctx.fill()` once per frame reduces context switching from O(N) draw calls to 1 single draw call per frame.
+**Action:** When rendering multi-particle Canvas 2D effects (such as noise, grain, or grid dots), always use path batching (`ctx.beginPath()` + `ctx.rect()` loop + `ctx.fill()`) instead of individual `ctx.fillRect()` invocations.
