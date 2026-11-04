@@ -1,3 +1,4 @@
+import { memo } from 'react'
 import { Check, Crop, Maximize2, RotateCcw, SlidersHorizontal, X } from 'lucide-react'
 import type { CropAspect } from '../lib/photoGeometry'
 
@@ -21,7 +22,32 @@ type Props = {
   onResetAll: () => void
 }
 
-export function PhotoTransformControls({ cropMode, cropAspect, rotation, onRotate180, onToggleCrop, onApplyCrop, onCancelCrop, onAspectChange, onResetCrop, onRotationStart, onRotationChange, onRotationEnd, onResetAdjustments, onResetTransform, onResetAll }: Props) {
+/**
+ * PhotoTransformControls provides buttons for rotation, crop mode toggling, aspect presets,
+ * and the continuous free-rotation slider.
+ *
+ * PERFORMANCE OPTIMIZATION:
+ * Wrapped in React.memo() to prevent redundant re-renders whenever the parent App updates unrelated
+ * state (such as 10+ light/color sliders, speed/volume, layer changes, or timeline scrubbing).
+ * Prevents re-creating the entire JSX tree, 5 button actions, aspect lists, and range inputs during high-frequency slider drags.
+ */
+export const PhotoTransformControls = memo(function PhotoTransformControls({
+  cropMode,
+  cropAspect,
+  rotation,
+  onRotate180,
+  onToggleCrop,
+  onApplyCrop,
+  onCancelCrop,
+  onAspectChange,
+  onResetCrop,
+  onRotationStart,
+  onRotationChange,
+  onRotationEnd,
+  onResetAdjustments,
+  onResetTransform,
+  onResetAll,
+}: Props) {
   const finishRotation = (element: HTMLInputElement) => { onRotationEnd(); element.blur() }
   return <div className="photo-transform-tools">
     <div className="photo-transform-buttons">
@@ -38,4 +64,4 @@ export function PhotoTransformControls({ cropMode, cropAspect, rotation, onRotat
     </div>}
     <label className="free-rotation"><span>Free rotation <output>{rotation}°</output></span><input type="range" min="-180" max="180" step="1" value={rotation} onPointerDown={onRotationStart} onPointerUp={event => finishRotation(event.currentTarget)} onPointerCancel={event => finishRotation(event.currentTarget)} onKeyDown={onRotationStart} onKeyUp={event => finishRotation(event.currentTarget)} onBlur={onRotationEnd} onChange={event => onRotationChange(Number(event.target.value))}/></label>
   </div>
-}
+})
