@@ -33,6 +33,21 @@ export function ProfessionalTimeline({ assetName, duration, currentTime, playing
   const timelineWidth = Math.max(640, safeDuration * pixelsPerSecond)
   const ticks = useMemo(() => Array.from({ length: Math.ceil(safeDuration / (zoom > 140 ? 1 : zoom > 70 ? 2 : 5)) + 1 }, (_, index) => index * (zoom > 140 ? 1 : zoom > 70 ? 2 : 5)), [safeDuration, zoom])
 
+  /**
+   * PERFORMANCE OPTIMIZATION:
+   * Memoize the waveform bars based on safeDuration.
+   * During playback, `currentTime` updates at up to 60fps, re-rendering ProfessionalTimeline.
+   * Without memoization, hundreds of <i> elements and Math.sin calculations were re-allocated
+   * and diffed on every single tick (~30,000+ elements/sec for longer clips).
+   * Impact: Eliminates redundant element allocation and sine calculations during playback (~100% reduction in waveform recalculation overhead).
+   */
+  const waveformBars = useMemo(() => {
+    const barCount = Math.max(20, Math.floor(safeDuration * 3))
+    return Array.from({ length: barCount }, (_, index) => (
+      <i key={index} style={{ height: `${22 + Math.abs(Math.sin(index * 1.7)) * 60}%` }} />
+    ))
+  }, [safeDuration])
+
   const seekFromPointer = (clientX: number) => {
     const element = trackRef.current
     if (!element) return
@@ -90,7 +105,7 @@ export function ProfessionalTimeline({ assetName, duration, currentTime, playing
         <div className="track-label"><b>T1</b><span>TITLES</span><Type size={10}/></div>
         <div className="pro-track title-track" style={{ width: timelineWidth }}><div className="title-clip" style={{ left: pixelsPerSecond * .5, width: Math.min(180, timelineWidth * .32) }}><Type size={10}/> Graphics / titles</div><div className="timeline-playhead ghost" style={{ left: currentTime * pixelsPerSecond }}/></div>
         <div className="track-label"><b>A1</b><span>AUDIO</span><button onClick={() => setMuted(value => !value)}>{muted ? <VolumeX size={10}/> : <Volume2 size={10}/>}</button></div>
-        <div className="pro-track audio-pro-track" style={{ width: timelineWidth }}><div className={`audio-pro-clip ${muted ? 'muted' : ''}`} style={{ width: safeDuration * pixelsPerSecond }}><Music2 size={11}/><span>{Array.from({ length: Math.max(20, Math.floor(safeDuration * 3)) }, (_, index) => <i key={index} style={{ height: `${22 + Math.abs(Math.sin(index * 1.7)) * 60}%` }}/>)}</span></div><div className="timeline-playhead ghost" style={{ left: currentTime * pixelsPerSecond }}/></div>
+        <div className="pro-track audio-pro-track" style={{ width: timelineWidth }}><div className={`audio-pro-clip ${muted ? 'muted' : ''}`} style={{ width: safeDuration * pixelsPerSecond }}><Music2 size={11}/><span>{waveformBars}</span></div><div className="timeline-playhead ghost" style={{ left: currentTime * pixelsPerSecond }}/></div>
       </div>
     </div>
   </section>
