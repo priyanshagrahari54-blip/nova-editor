@@ -116,7 +116,43 @@ function App() {
   const togglePlayback = () => { const video = videoRef.current; if (!video) return; if (video.paused) { void video.play().then(() => setIsPlaying(true)).catch(() => { setIsPlaying(false); setToast('The browser could not start video playback.') }) } else { video.pause(); setIsPlaying(false) } }
   const addText = () => { const layer = { id: crypto.randomUUID(), name: 'Title text', type: 'Text' as const, visible: true, locked: false, opacity: 100, text: 'NOVA TITLE' }; setHistory(value => [...value, { settings, layers }]); setLayers(value => [layer, ...value]); setToast('Editable text layer added.') }
   const planAgent = async () => { if (!agentPrompt.trim()) return; try { setAgentPlan(await createPowerfulPlan({ operation: selected?.kind === 'video' ? 'editVideo' : 'editImage', prompt: agentPrompt, preserve, assetName: selected?.name })) } catch { setAgentPlan(createPlan(agentPrompt, preserve)) } }
-  useEffect(() => { const key = (event: KeyboardEvent) => { const target = event.target as HTMLElement | null; const isEditorRange = target instanceof HTMLInputElement && target.type === 'range'; const isTyping = (target?.matches('input, textarea, select, [contenteditable="true"]') ?? false) && !isEditorRange; const modifier = event.metaKey || event.ctrlKey; if (modifier && event.key.toLowerCase() === 'z' && !isTyping) { event.preventDefault(); if (event.shiftKey) redo(); else undo() } if (modifier && event.key.toLowerCase() === 'y' && !isTyping) { event.preventDefault(); redo() } if (modifier && event.key.toLowerCase() === 's') { event.preventDefault(); void persistProject() } if (event.code === 'Space' && selected?.kind === 'video' && !isTyping) { event.preventDefault(); togglePlayback() } }; window.addEventListener('keydown', key, true); return () => window.removeEventListener('keydown', key, true) })
+
+  // PERFORMANCE OPTIMIZATION:
+  // Route global keyboard actions through a ref container so the keydown listener attaches once on mount
+  // and is never torn down/re-registered on every slider change, pan gesture, or video timeupdate (up to 60fps).
+  const keyActionsRef = useRef({ redo, undo, persistProject, togglePlayback, isVideo: selected?.kind === 'video' })
+  useEffect(() => {
+    keyActionsRef.current = { redo, undo, persistProject, togglePlayback, isVideo: selected?.kind === 'video' }
+  })
+  useEffect(() => {
+    const key = (event: KeyboardEvent) => {
+      const target = event.target as HTMLElement | null
+      const isEditorRange = target instanceof HTMLInputElement && target.type === 'range'
+      const isTyping = (target?.matches('input, textarea, select, [contenteditable="true"]') ?? false) && !isEditorRange
+      const modifier = event.metaKey || event.ctrlKey
+      const actions = keyActionsRef.current
+      if (modifier && event.key.toLowerCase() === 'z' && !isTyping) {
+        event.preventDefault()
+        if (event.shiftKey) actions.redo()
+        else actions.undo()
+      }
+      if (modifier && event.key.toLowerCase() === 'y' && !isTyping) {
+        event.preventDefault()
+        actions.redo()
+      }
+      if (modifier && event.key.toLowerCase() === 's') {
+        event.preventDefault()
+        void actions.persistProject()
+      }
+      if (event.code === 'Space' && actions.isVideo && !isTyping) {
+        event.preventDefault()
+        actions.togglePlayback()
+      }
+    }
+    window.addEventListener('keydown', key, true)
+    return () => window.removeEventListener('keydown', key, true)
+  }, [])
+
   const selectedMediaLabel = useMemo(() => selected ? `${selected.kind === 'image' ? 'Photo' : 'Video'} · ${selected.name}${selected.kind === 'image' && selected.width && selected.height ? ` · ${selected.width} × ${selected.height}` : ''}` : 'No media selected', [selected])
 
   return <main className="nova-app" onDragOver={event => event.preventDefault()} onDrop={onDrop} onPointerUpCapture={event => { const target = event.target; if (target instanceof HTMLInputElement && target.type === 'range') target.blur() }}>
