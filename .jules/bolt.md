@@ -1,0 +1,3 @@
+## 2026-11-07 - Avoid Unbounded Window Event Listeners in High-Frequency Interactive Editors
+**Learning:** In interactive media editing apps with high-frequency updates (e.g. continuous slider drags or HTML5 `<video>` `timeupdate` events firing up to 60 times/sec), unbounded `useEffect` hooks attaching window event listeners cause constant `removeEventListener` + `addEventListener` thrashing and closure re-allocations on every single render cycle.
+**Action:** Always route dynamic actions and state through a mutable ref (`keyActionsRef`) and stabilize the global event listener with an empty dependency array `[]` so that DOM event listeners attach once on mount and remain tear-down free during playback and slider dragging.
