@@ -1,0 +1,5 @@
+# Bolt Performance Journal
+
+## 2026-09-08 - Module-level Preallocated LUT for Integer-Bounded Pixel Transformations
+**Learning:** In canvas pixel processing functions running on multi-megapixel frames, computing non-linear tone curves per pixel creates millions of redundant floating-point multiplications and powers. For 8-bit RGB channels with integer weights (e.g. `red * 54 + green * 183 + blue * 19`), the total range of inputs is bounded (65,281 values). By pre-allocating a single `Float32Array(65281)` at the module level (preventing per-frame GC pressure) and evaluating the tone curve once per frame into the LUT, per-pixel tone evaluation becomes an O(1) integer-index lookup that produces 100% bit-exact results while eliminating millions of operations per render.
+**Action:** When optimizing per-pixel image manipulation loops where channel combinations evaluate to a bounded integer domain, pre-compute curves into a reusable typed array outside the loop instead of recalculating inside.
