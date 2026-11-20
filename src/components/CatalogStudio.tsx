@@ -105,7 +105,7 @@ export default function CatalogStudio() {
   }
 
   const visible = products.filter(product => [product.sku, product.title, product.brand, product.category].join(' ').toLowerCase().includes(filter.toLowerCase()))
-  const field = (key: keyof ProductRecord, label: string, required = false) => (
+  type EditableField = 'sku' | 'title' | 'brand' | 'category' | 'description' | 'color' | 'material' | 'price' | 'currency' | 'locale'\n  const field = (key: EditableField, label: string, required = false) => (
     <label className="product-edit-field"><span>{label}{required ? ' *' : ''}</span>
       {key === 'description'
         ? <textarea value={String(editing?.[key] ?? '')} onChange={event => setEditing(current => current ? { ...current, [key]: event.target.value } : current)} rows={4}/>
