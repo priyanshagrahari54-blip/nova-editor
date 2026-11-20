@@ -1,12 +1,11 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { BookOpen, Save } from 'lucide-react'
 import { emptyBrandMemory, loadBrandMemory, saveBrandMemory, type BrandMemoryProfile } from '../lib/brandMemory'
 import './BrandMemory.css'
 
 export default function BrandMemory() {
-  const [profile, setProfile] = useState<BrandMemoryProfile>(emptyBrandMemory)
+  const [profile, setProfile] = useState<BrandMemoryProfile>(() => loadBrandMemory())
   const [notice, setNotice] = useState('')
-  useEffect(() => setProfile(loadBrandMemory()), [])
   const update = (key: keyof BrandMemoryProfile, value: string) => setProfile(current => ({ ...current, [key]: value }))
   type BrandTextField = Exclude<keyof BrandMemoryProfile, 'updatedAt'>
   const fields: Array<[BrandTextField, string, string]> = [
