@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { ArrowRight, Check, Clapperboard, Image as ImageIcon, Layers3, Link2, Sparkles, Wand2 } from 'lucide-react'
 import './LandingPage.css'
 
-const APP_URL = '/editor'
+const APP_URL = '/editor'\nconst CATALOG_URL = '/catalog'
 
 function getReferralCode() {
   try {
@@ -50,8 +50,8 @@ export default function LandingPage() {
     <main className="nova-landing">
       <nav className="landing-nav">
         <a className="landing-brand" href="/" aria-label="Nova Studio home"><span className="brand-mark"><Sparkles size={18} /></span><span>NOVA <small>STUDIO</small></span></a>
-        <div className="landing-nav-links"><a href="#features">Features</a><a href="#workflow">How it works</a><a href="#pricing">Pricing</a></div>
-        <a className="landing-nav-cta" href={APP_URL}>Open editor <ArrowRight size={15} /></a>
+        <div className="landing-nav-links"><a href="#features">Features</a><a href="#workflow">How it works</a><a href={CATALOG_URL}>Product catalog</a><a href="#pricing">Pricing</a></div>
+        <a className="landing-nav-cta" href={CATALOG_URL}>Open catalog <ArrowRight size={15} /></a>
       </nav>
 
       <section className="landing-hero">
@@ -59,7 +59,7 @@ export default function LandingPage() {
           <div className="eyebrow"><span /> CREATIVE WORKSPACE FOR THE NEXT WAVE</div>
           <h1>Make every frame<br /><em>feel intentional.</em></h1>
           <p className="hero-description">A focused photo and video editing workspace for creators, freelancers and small studios. Shape your look, refine your media and keep your edits under control.</p>
-          <div className="hero-actions"><a className="primary-cta" href={APP_URL}>Start creating free <ArrowRight size={17} /></a><a className="secondary-cta" href="#features">Explore features</a></div>
+          <div className="hero-actions"><a className="primary-cta" href={APP_URL}>Start creating free <ArrowRight size={17} /></a><a className="secondary-cta" href={CATALOG_URL}>Explore product catalog</a></div>
           <div className="hero-proof"><span><Check size={14} /> Free to get started</span><span><Check size={14} /> No card required</span><span><Check size={14} /> Works in your browser</span></div>
         </div>
         <div className="hero-art" aria-label="Nova Studio creative editing workspace preview">
