@@ -2,7 +2,7 @@ import type { ProductRecord } from './catalog'
 
 const DB_NAME = 'nova-commerce-db'
 const STORE = 'products'
-const VERSION = 1
+const VERSION = 2
 
 function openCatalogDb(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
@@ -10,6 +10,7 @@ function openCatalogDb(): Promise<IDBDatabase> {
     request.onupgradeneeded = () => {
       const db = request.result
       if (!db.objectStoreNames.contains(STORE)) db.createObjectStore(STORE, { keyPath: 'id' })
+      if (!db.objectStoreNames.contains('product-images')) db.createObjectStore('product-images', { keyPath: 'id' })
     }
     request.onsuccess = () => resolve(request.result)
     request.onerror = () => reject(request.error)
