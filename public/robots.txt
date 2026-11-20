@@ -1,0 +1,5 @@
+User-agent: *
+Allow: /
+Disallow: /editor
+
+Sitemap: https://nova-editor-inky.vercel.app/sitemap.xml
