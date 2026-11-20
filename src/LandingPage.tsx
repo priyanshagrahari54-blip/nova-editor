@@ -2,7 +2,8 @@ import { useEffect, useMemo, useState } from 'react'
 import { ArrowRight, Check, Clapperboard, Image as ImageIcon, Layers3, Link2, Sparkles, Wand2 } from 'lucide-react'
 import './LandingPage.css'
 
-const APP_URL = '/editor'\nconst CATALOG_URL = '/catalog'
+const APP_URL = '/editor'
+const CATALOG_URL = '/catalog'
 
 function getReferralCode() {
   try {
