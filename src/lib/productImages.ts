@@ -1,5 +1,3 @@
-import type { ProductRecord } from './catalog'
-
 const DB_NAME = 'nova-commerce-db'
 const IMAGE_STORE = 'product-images'
 
