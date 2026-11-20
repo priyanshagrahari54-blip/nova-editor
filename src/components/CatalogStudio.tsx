@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Download, FileSpreadsheet, FolderOpen, Package, ShieldCheck, Upload, Plus, Pencil, Trash2, Save, X } from 'lucide-react'
-import { exportProductCsv, parseProductCsv, validateCatalog, type ProductRecord } from '../lib/catalog'
+import { exportProductCsv, getCsvHeaders, parseProductCsv, productFieldLabels, validateCatalog, type CsvMapping, type ProductField, type ProductRecord } from '../lib/catalog'
 import BrandMemory from './BrandMemory'
 import { getProducts, replaceProducts } from '../lib/catalogDb'
 import './CatalogStudio.css'
@@ -18,6 +18,9 @@ export default function CatalogStudio() {
   const [filter, setFilter] = useState('')
   const [editing, setEditing] = useState<ProductRecord | null>(null)
   const [formError, setFormError] = useState('')
+  const [csvText, setCsvText] = useState('')
+  const [csvHeaders, setCsvHeaders] = useState<string[]>([])
+  const [csvMapping, setCsvMapping] = useState<CsvMapping>({})
   const fileRef = useRef<HTMLInputElement>(null)
   const issues = useMemo(() => validateCatalog(products), [products])
   const errors = issues.filter(issue => issue.severity === 'error').length
@@ -43,11 +46,39 @@ export default function CatalogStudio() {
     } finally { setBusy(false) }
   }
 
-  const importCsv = async (file?: File) => {
+  const selectCsv = async (file?: File) => {
     if (!file) return
+    try {
+      const text = await file.text()
+      const headers = getCsvHeaders(text)
+      setCsvText(text)
+      setCsvHeaders(headers)
+      const aliases: Record<ProductField, string[]> = {
+        sku: ['sku', 'seller sku', 'product id', 'item sku', 'variant sku'],
+        title: ['title', 'product title', 'name', 'product name'],
+        brand: ['brand', 'manufacturer'], category: ['category', 'product type', 'type'],
+        description: ['description', 'product description', 'details'], color: ['color', 'colour'],
+        material: ['material', 'fabric'], price: ['price', 'selling price', 'list price'],
+        currency: ['currency', 'currency code'], locale: ['locale', 'language', 'market']
+      }
+      const detected: CsvMapping = {}
+      ;(Object.keys(aliases) as ProductField[]).forEach(field => {
+        const found = headers.find(header => aliases[field].includes(header.toLowerCase().replace(/[_-]+/g, ' ').trim()))
+        if (found) detected[field] = found
+      })
+      setCsvMapping(detected)
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : 'Could not read CSV.')
+    } finally {
+      if (fileRef.current) fileRef.current.value = ''
+    }
+  }
+
+  const importCsv = async () => {
+    if (!csvText || !csvMapping.sku || !csvMapping.title) return
     setBusy(true)
     try {
-      const parsed = parseProductCsv(await file.text())
+      const parsed = parseProductCsv(csvText, csvMapping)
       const merged = [...products]
       const bySku = new Map(merged.filter(item => item.sku.trim()).map((item, index) => [item.sku.trim().toLowerCase(), index]))
       let added = 0
@@ -62,10 +93,12 @@ export default function CatalogStudio() {
       }
       await replaceProducts(merged)
       setProducts(merged)
-      setMessage(`Imported ${parsed.length} rows: ${added} new, ${parsed.length - added} updated. ${merged.length} total products.`)
+      setMessage('Imported ' + parsed.length + ' rows: ' + added + ' new, ' + (parsed.length - added) + ' updated. ' + merged.length + ' total products.')
+      setCsvText('')
+      setCsvHeaders([])
     } catch (error) {
       setMessage(error instanceof Error ? error.message : 'CSV import failed.')
-    } finally { setBusy(false); if (fileRef.current) fileRef.current.value = '' }
+    } finally { setBusy(false) }
   }
 
   const saveProduct = async () => {
@@ -117,7 +150,8 @@ export default function CatalogStudio() {
 
   return <main className="catalog-page">
     <header className="catalog-header"><a href="/">← NOVA</a><span>PRODUCT OPERATIONS</span><a href="/editor">Open editor ↗</a></header>
-    <section className="catalog-hero"><div><span className="catalog-kicker">NOVA COMMERCE INTELLIGENCE</span><h1>Your product data.<br/><em>Finally under control.</em></h1><p>Build one verified product record, catch catalog issues and prepare clean data for every sales channel. Your catalog stays on this device.</p><div className="catalog-actions"><button onClick={() => fileRef.current?.click()} disabled={busy}><Upload size={16}/>{busy ? 'Saving…' : 'Import product CSV'}</button><button className="secondary" onClick={download} disabled={!products.length}><Download size={16}/> Export catalog</button><button className="secondary" onClick={() => { setFormError(''); setEditing(emptyProduct()) }} disabled={busy}><Plus size={16}/> Add product</button><input ref={fileRef} hidden type="file" accept=".csv,text/csv" onChange={event => void importCsv(event.target.files?.[0])}/></div><small>{message}</small></div><div className="catalog-hero-art"><div className="orbit orbit-one"/><div className="orbit orbit-two"/><Package size={76}/><span>PRODUCT<br/>TRUTH RECORD</span></div></section>
+    <section className="catalog-hero"><div><span className="catalog-kicker">NOVA COMMERCE INTELLIGENCE</span><h1>Your product data.<br/><em>Finally under control.</em></h1><p>Build one verified product record, catch catalog issues and prepare clean data for every sales channel. Your catalog stays on this device.</p><div className="catalog-actions"><button onClick={() => fileRef.current?.click()} disabled={busy}><Upload size={16}/>{busy ? 'Saving…' : 'Import product CSV'}</button><button className="secondary" onClick={download} disabled={!products.length}><Download size={16}/> Export catalog</button><button className="secondary" onClick={() => { setFormError(''); setEditing(emptyProduct()) }} disabled={busy}><Plus size={16}/> Add product</button><input ref={fileRef} hidden type="file" accept=".csv,text/csv" onChange={event => void selectCsv(event.target.files?.[0])}/></div><small>{message}</small></div><div className="catalog-hero-art"><div className="orbit orbit-one"/><div className="orbit orbit-two"/><Package size={76}/><span>PRODUCT<br/>TRUTH RECORD</span></div></section>
+    {csvText && <section className="csv-mapper"><div><span className="catalog-kicker">IMPORT PREVIEW</span><h2>Match spreadsheet columns</h2><p>Choose which CSV header supplies each Nova field. SKU and Title are required.</p></div><div className="csv-mapper-grid">{(Object.keys(productFieldLabels) as ProductField[]).map(field => <label key={field}><span>{productFieldLabels[field]}{field === 'sku' || field === 'title' ? ' *' : ''}</span><select value={csvMapping[field] ?? ''} onChange={event => setCsvMapping(current => ({ ...current, [field]: event.target.value || undefined }))}><option value="">Not mapped</option>{csvHeaders.map(header => <option key={header} value={header}>{header}</option>)}</select></label>)}</div><div className="csv-mapper-actions"><button className="secondary" onClick={() => { setCsvText(''); setCsvHeaders([]) }}>Cancel</button><button onClick={() => void importCsv()} disabled={busy || !csvMapping.sku || !csvMapping.title}><Upload size={15}/> Import CSV</button></div></section>}
     <section className="catalog-metrics"><article><span>PRODUCTS</span><b>{products.length}</b><small>Stored locally</small></article><article><span>BLOCKING ERRORS</span><b className={errors ? 'metric-danger' : ''}>{errors}</b><small>Must be corrected</small></article><article><span>REVIEW WARNINGS</span><b>{warnings}</b><small>Recommended fields</small></article><article><span>DATA CONTROL</span><b><ShieldCheck size={25}/></b><small>Local-first storage</small></article></section>
     <section className="catalog-workspace"><div className="catalog-section-heading"><div><span className="catalog-kicker">CATALOG INTELLIGENCE</span><h2>Product truth records</h2></div><label className="catalog-search"><FolderOpen size={15}/><input value={filter} onChange={event => setFilter(event.target.value)} placeholder="Search SKU, brand, title…"/></label></div>
       {products.length ? <div className="catalog-table-wrap"><table><thead><tr><th>SKU</th><th>PRODUCT</th><th>BRAND</th><th>CATEGORY</th><th>PRICE</th><th>STATUS</th><th>ACTIONS</th></tr></thead><tbody>{visible.map(product => { const rowIssues = issues.filter(issue => issue.sku === product.sku); return <tr key={product.id}><td>{product.sku || '—'}</td><td><strong>{product.title || 'Untitled product'}</strong><small>{product.color} {product.material}</small></td><td>{product.brand || '—'}</td><td>{product.category || '—'}</td><td>{product.price ? `${product.currency} ${product.price}` : '—'}</td><td><span className={rowIssues.some(issue => issue.severity === 'error') ? 'status-error' : rowIssues.length ? 'status-review' : 'status-ready'}>{rowIssues.some(issue => issue.severity === 'error') ? 'FIX REQUIRED' : rowIssues.length ? 'REVIEW' : 'READY'}</span></td><td><div className="product-row-actions"><button aria-label={`Edit ${product.sku}`} onClick={() => { setFormError(''); setEditing({ ...product }) }}><Pencil size={15}/></button><button aria-label={`Delete ${product.sku}`} onClick={() => void removeProduct(product)}><Trash2 size={15}/></button></div></td></tr> })}</tbody></table>{!visible.length && <p className="catalog-empty">No matching products.</p>}</div> : <div className="catalog-empty-state"><FileSpreadsheet size={30}/><h3>Start with your existing product sheet</h3><p>Import a CSV with at least SKU and Title columns, or add your first product manually.</p><button onClick={() => fileRef.current?.click()}>Choose CSV file</button></div>}
