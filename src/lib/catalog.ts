@@ -15,60 +15,79 @@ export type ProductRecord = {
 }
 
 export type CatalogIssue = { sku: string; field: string; severity: 'error' | 'warning'; message: string }
+export type ProductField = keyof Omit<ProductRecord, 'id' | 'source' | 'updatedAt'>
+export type CsvMapping = Partial<Record<ProductField, string>>
 
-const aliases: Record<keyof Omit<ProductRecord, 'id' | 'source' | 'updatedAt'>, string[]> = {
+export const productFieldLabels: Record<ProductField, string> = {
+  sku: 'SKU', title: 'Title', brand: 'Brand', category: 'Category', description: 'Description',
+  color: 'Colour', material: 'Material', price: 'Price', currency: 'Currency', locale: 'Locale'
+}
+
+const aliases: Record<ProductField, string[]> = {
   sku: ['sku', 'seller sku', 'product id', 'item sku', 'variant sku'],
   title: ['title', 'product title', 'name', 'product name'],
-  brand: ['brand', 'manufacturer'],
-  category: ['category', 'product type', 'type'],
-  description: ['description', 'product description', 'details'],
-  color: ['color', 'colour'],
-  material: ['material', 'fabric'],
-  price: ['price', 'selling price', 'list price'],
-  currency: ['currency', 'currency code'],
-  locale: ['locale', 'language', 'market']
+  brand: ['brand', 'manufacturer'], category: ['category', 'product type', 'type'],
+  description: ['description', 'product description', 'details'], color: ['color', 'colour'],
+  material: ['material', 'fabric'], price: ['price', 'selling price', 'list price'],
+  currency: ['currency', 'currency code'], locale: ['locale', 'language', 'market']
 }
 
-function parseCsvLine(line: string, delimiter: string): string[] {
-  const values: string[] = []
+function parseCsv(text: string, delimiter: string): string[][] {
+  const rows: string[][] = []
+  let row: string[] = []
   let value = ''
   let quoted = false
-  for (let i = 0; i < line.length; i += 1) {
-    const char = line[i]
+  for (let i = 0; i < text.length; i += 1) {
+    const char = text[i]
     if (char === '"') {
-      if (quoted && line[i + 1] === '"') { value += '"'; i += 1 }
+      if (quoted && text[i + 1] === '"') { value += '"'; i += 1 }
       else quoted = !quoted
     } else if (char === delimiter && !quoted) {
-      values.push(value.trim()); value = ''
+      row.push(value.trim()); value = ''
+    } else if ((char === '\n' || char === '\r') && !quoted) {
+      if (char === '\r' && text[i + 1] === '\n') i += 1
+      row.push(value.trim()); value = ''
+      if (row.some(cell => cell.length)) rows.push(row)
+      row = []
     } else value += char
   }
-  values.push(value.trim())
-  return values
+  row.push(value.trim())
+  if (row.some(cell => cell.length)) rows.push(row)
+  if (quoted) throw new Error('CSV contains an unclosed quoted field. Check the file and try again.')
+  return rows
 }
 
-export function parseProductCsv(text: string): ProductRecord[] {
-  const lines = text.replace(/^\uFEFF/, '').split(/\r?\n/).filter(line => line.trim().length > 0)
-  if (lines.length < 2) return []
-  const delimiter = (lines[0].match(/,/g) ?? []).length >= (lines[0].match(/;/g) ?? []).length ? ',' : ';'
-  const headers = parseCsvLine(lines[0], delimiter).map(value => value.toLowerCase().replace(/[_-]+/g, ' ').trim())
-  const indexes = Object.fromEntries(Object.entries(aliases).map(([field, names]) => [field, headers.findIndex(header => names.includes(header))])) as Record<string, number>
-  if (indexes.sku < 0 || indexes.title < 0) throw new Error('CSV must contain SKU (or Product ID) and Title (or Product Name) columns.')
-  const records: ProductRecord[] = []
-  for (const [rowIndex, line] of lines.slice(1).entries()) {
-    const cells = parseCsvLine(line, delimiter)
-    const get = (field: string) => indexes[field] >= 0 ? (cells[indexes[field]] ?? '').trim() : ''
+const normalizeHeader = (value: string) => value.toLowerCase().replace(/[_-]+/g, ' ').trim()
+
+export function getCsvHeaders(text: string): string[] {
+  const sample = text.replace(/^\uFEFF/, '').slice(0, 20000)
+  const comma = (sample.split('\n')[0].match(/,/g) ?? []).length
+  const semicolon = (sample.split('\n')[0].match(/;/g) ?? []).length
+  return parseCsv(sample, comma >= semicolon ? ',' : ';')[0] ?? []
+}
+
+export function parseProductCsv(text: string, mapping?: CsvMapping): ProductRecord[] {
+  const clean = text.replace(/^\uFEFF/, '')
+  const firstLine = clean.split(/\r?\n/, 1)[0] ?? ''
+  const delimiter = (firstLine.match(/,/g) ?? []).length >= (firstLine.match(/;/g) ?? []).length ? ',' : ';'
+  const rows = parseCsv(clean, delimiter)
+  if (rows.length < 2) return []
+  const headers = rows[0].map(normalizeHeader)
+  const indexes = Object.fromEntries((Object.keys(aliases) as ProductField[]).map(field => {
+    const selected = mapping?.[field]
+    const index = selected ? rows[0].findIndex(header => header === selected) : headers.findIndex(header => aliases[field].includes(header))
+    return [field, index]
+  })) as Record<ProductField, number>
+  if (indexes.sku < 0 || indexes.title < 0) throw new Error('Map both SKU and Title columns before importing.')
+  return rows.slice(1).map((cells, rowIndex) => {
+    const get = (field: ProductField) => indexes[field] >= 0 ? (cells[indexes[field]] ?? '').trim() : ''
     const sku = get('sku')
     const title = get('title')
-    if (!sku && !title) continue
-    records.push({
-      id: `csv-${rowIndex}-${sku || crypto.randomUUID()}`, sku, title,
-      brand: get('brand'), category: get('category'), description: get('description'),
-      color: get('color'), material: get('material'), price: get('price'),
-      currency: get('currency') || 'USD', locale: get('locale') || 'en',
-      source: 'import', updatedAt: Date.now()
-    })
-  }
-  return records
+    return { id: `csv-${rowIndex}-${sku || crypto.randomUUID()}`, sku, title,
+      brand: get('brand'), category: get('category'), description: get('description'), color: get('color'),
+      material: get('material'), price: get('price'), currency: get('currency') || 'USD',
+      locale: get('locale') || 'en', source: 'import', updatedAt: Date.now() } satisfies ProductRecord
+  }).filter(product => product.sku || product.title)
 }
 
 export function validateCatalog(records: ProductRecord[]): CatalogIssue[] {
@@ -88,7 +107,7 @@ export function validateCatalog(records: ProductRecord[]): CatalogIssue[] {
 }
 
 export function exportProductCsv(records: ProductRecord[]): string {
-  const fields: Array<keyof ProductRecord> = ['sku','title','brand','category','description','color','material','price','currency','locale']
+  const fields: ProductField[] = ['sku','title','brand','category','description','color','material','price','currency','locale']
   const quote = (value: unknown) => `"${String(value ?? '').replace(/"/g, '""')}"`
   return [fields.join(','), ...records.map(record => fields.map(field => quote(record[field])).join(','))].join('\r\n')
 }
