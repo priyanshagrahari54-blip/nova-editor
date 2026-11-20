@@ -2,6 +2,8 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { Download, FileSpreadsheet, FolderOpen, Package, ShieldCheck, Upload, Plus, Pencil, Trash2, Save, X } from 'lucide-react'
 import { exportProductCsv, getCsvHeaders, parseProductCsv, productFieldLabels, validateCatalog, type CsvMapping, type ProductField, type ProductRecord } from '../lib/catalog'
 import BrandMemory from './BrandMemory'
+import ChangeImpact from './ChangeImpact'
+import { recordProductChange } from '../lib/changeImpact'
 import { getProducts, replaceProducts } from '../lib/catalogDb'
 import './CatalogStudio.css'
 
@@ -18,6 +20,7 @@ export default function CatalogStudio() {
   const [filter, setFilter] = useState('')
   const [editing, setEditing] = useState<ProductRecord | null>(null)
   const [formError, setFormError] = useState('')
+  const [changeRevision, setChangeRevision] = useState(0)
   const [csvText, setCsvText] = useState('')
   const [csvHeaders, setCsvHeaders] = useState<string[]>([])
   const [csvMapping, setCsvMapping] = useState<CsvMapping>({})
@@ -116,11 +119,15 @@ export default function CatalogStudio() {
       setFormError('This SKU already exists. Each product must have a unique SKU.')
       return
     }
-    const exists = products.some(item => item.id === editing.id)
+    const previous = products.find(item => item.id === editing.id)
+    const exists = Boolean(previous)
     const next = exists
       ? products.map(item => item.id === editing.id ? { ...editing, sku: editing.sku.trim(), title: editing.title.trim(), updatedAt: Date.now() } : item)
       : [...products, { ...editing, sku: editing.sku.trim(), title: editing.title.trim(), updatedAt: Date.now() }]
-    if (await persist(next, exists ? 'Product record updated.' : 'Product added to your local catalog.')) setEditing(null)
+    if (await persist(next, exists ? 'Product record updated.' : 'Product added to your local catalog.')) {
+      if (previous) { recordProductChange(previous, editing); setChangeRevision(value => value + 1) }
+      setEditing(null)
+    }
     setFormError('')
   }
 
@@ -159,6 +166,7 @@ export default function CatalogStudio() {
     </section>
     {editing && <div className="product-edit-backdrop" role="presentation" onMouseDown={event => { if (event.target === event.currentTarget) setEditing(null) }}><section className="product-edit-panel" role="dialog" aria-modal="true" aria-labelledby="product-edit-title"><header><div><span className="catalog-kicker">PRODUCT TRUTH RECORD</span><h2 id="product-edit-title">{products.some(item => item.id === editing.id) ? 'Edit product' : 'Add product'}</h2></div><button className="product-edit-close" onClick={() => setEditing(null)} aria-label="Close"><X/></button></header><div className="product-edit-grid">{field('sku','SKU',true)}{field('title','Product title',true)}{field('brand','Brand')}{field('category','Category')}{field('color','Colour')}{field('material','Material')}{field('price','Price')}{field('currency','Currency')}{field('locale','Locale')}{field('description','Description')}</div>{formError && <p className="product-edit-error">{formError}</p>}<footer><button className="secondary" onClick={() => setEditing(null)}>Cancel</button><button onClick={() => void saveProduct()} disabled={busy}><Save size={15}/> Save record</button></footer></section></div>}
     <BrandMemory/>
+    <ChangeImpact key={changeRevision}/>
     <footer className="catalog-footer">NOVA · PRODUCT OPERATIONS OS <span>Phase 1 · Local catalog foundation</span></footer>
   </main>
 }
