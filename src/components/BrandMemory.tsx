@@ -8,7 +8,8 @@ export default function BrandMemory() {
   const [notice, setNotice] = useState('')
   useEffect(() => setProfile(loadBrandMemory()), [])
   const update = (key: keyof BrandMemoryProfile, value: string) => setProfile(current => ({ ...current, [key]: value }))
-  const fields: Array<[keyof BrandMemoryProfile, string, string]> = [
+  type BrandTextField = Exclude<keyof BrandMemoryProfile, 'updatedAt'>
+  const fields: Array<[BrandTextField, string, string]> = [
     ['brandName','Brand name','Name used in listings and creative assets'],
     ['voice','Brand voice','e.g. confident, warm, minimal; words to use or avoid'],
     ['audience','Target audience','Who the product is for and their needs'],
