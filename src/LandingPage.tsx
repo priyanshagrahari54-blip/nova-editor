@@ -83,7 +83,7 @@ export default function LandingPage() {
 
       <section className="referral-section"><div><div className="eyebrow">GROW TOGETHER</div><h2>Know a creator?<br /><em>Pass Nova along.</em></h2><p>Share your personal link with a creator or studio. Referral rewards are not active yet; this link is for sharing and early discovery only.</p></div><div className="share-card"><div className="share-icon"><Link2/></div><b>Your share link</b><code>{shareUrl}</code><button onClick={copyReferral}>{copied ? <><Check size={16}/> Copied</> : <><Link2 size={16}/> Copy share link</>}</button><small>Sharing does not create a cash reward or guarantee a referral credit.</small></div></section>
 
-      <footer className="landing-footer"><a className="landing-brand" href="/"><span className="brand-mark"><Sparkles size={18}/></span><span>NOVA <small>STUDIO</small></span></a><span>Built for thoughtful creative work.</span><div><a href="mailto:hello@nova-studio.app?subject=Nova%20Studio%20feedback">Contact / feedback</a><a href="/privacy">Privacy</a><a href="/terms">Terms</a></div></footer>
+      <footer className="landing-footer"><a className="landing-brand" href="/"><span className="brand-mark"><Sparkles size={18}/></span><span>NOVA <small>STUDIO</small></span></a><span>Built for thoughtful creative work.</span><div><a href="https://github.com/priyanshagrahari54-blip/nova-editor/issues/new">Contact / feedback</a><a href="https://github.com/priyanshagrahari54-blip/nova-editor">GitHub</a><a href="https://github.com/priyanshagrahari54-blip/nova-editor/issues">Feedback</a></div></footer>
     </main>
   )
 }
