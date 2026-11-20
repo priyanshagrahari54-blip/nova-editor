@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { ImagePlus, Trash2, ShieldCheck, FileText, CheckCircle2 } from 'lucide-react'
 import type { ProductRecord } from '../lib/catalog'
-import { getProductImages, saveProductImage, deleteProductImage, type ProductImage } from '../lib/catalogDb'
+import { getProductImages, saveProductImage, deleteProductImage, type ProductImage } from '../lib/productImages'
 import './ProductOpsWorkbench.css'
 
 type Props = { products: ProductRecord[] }
