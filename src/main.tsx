@@ -3,11 +3,14 @@ import { createRoot } from 'react-dom/client'
 import './index.css'
 import App from './App.tsx'
 import LandingPage from './LandingPage.tsx'
+import CatalogStudio from './components/CatalogStudio'
 
-const isEditorRoute = window.location.pathname === '/editor' || window.location.pathname.startsWith('/editor/')
+const path = window.location.pathname
+const isEditorRoute = path === '/editor' || path.startsWith('/editor/')
+const isCatalogRoute = path === '/catalog' || path.startsWith('/catalog/')
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    {isEditorRoute ? <App /> : <LandingPage />}
+    {isCatalogRoute ? <CatalogStudio /> : isEditorRoute ? <App /> : <LandingPage />}
   </StrictMode>,
 )
