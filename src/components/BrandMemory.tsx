@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { BookOpen, Save } from 'lucide-react'
-import { emptyBrandMemory, loadBrandMemory, saveBrandMemory, type BrandMemoryProfile } from '../lib/brandMemory'
+import { loadBrandMemory, saveBrandMemory, type BrandMemoryProfile } from '../lib/brandMemory'
 import './BrandMemory.css'
 
 export default function BrandMemory() {
