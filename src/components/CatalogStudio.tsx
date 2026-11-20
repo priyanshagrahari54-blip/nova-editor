@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Download, FileSpreadsheet, FolderOpen, Package, ShieldCheck, Upload, Plus, Pencil, Trash2, Save, X } from 'lucide-react'
 import { exportProductCsv, parseProductCsv, validateCatalog, type ProductRecord } from '../lib/catalog'
+import BrandMemory from './BrandMemory'
 import { getProducts, replaceProducts } from '../lib/catalogDb'
 import './CatalogStudio.css'
 
@@ -122,6 +123,7 @@ export default function CatalogStudio() {
       {issues.length > 0 && <aside className="catalog-issues"><h3>Data quality report <span>{issues.length} findings</span></h3>{issues.slice(0, 30).map((issue, index) => <div key={`${issue.sku}-${issue.field}-${index}`}><b>{issue.sku}</b><span>{issue.field}</span><p>{issue.message}</p><i className={issue.severity}>{issue.severity.toUpperCase()}</i></div>)}</aside>}
     </section>
     {editing && <div className="product-edit-backdrop" role="presentation" onMouseDown={event => { if (event.target === event.currentTarget) setEditing(null) }}><section className="product-edit-panel" role="dialog" aria-modal="true" aria-labelledby="product-edit-title"><header><div><span className="catalog-kicker">PRODUCT TRUTH RECORD</span><h2 id="product-edit-title">{products.some(item => item.id === editing.id) ? 'Edit product' : 'Add product'}</h2></div><button className="product-edit-close" onClick={() => setEditing(null)} aria-label="Close"><X/></button></header><div className="product-edit-grid">{field('sku','SKU',true)}{field('title','Product title',true)}{field('brand','Brand')}{field('category','Category')}{field('color','Colour')}{field('material','Material')}{field('price','Price')}{field('currency','Currency')}{field('locale','Locale')}{field('description','Description')}</div>{formError && <p className="product-edit-error">{formError}</p>}<footer><button className="secondary" onClick={() => setEditing(null)}>Cancel</button><button onClick={() => void saveProduct()} disabled={busy}><Save size={15}/> Save record</button></footer></section></div>}
+    <BrandMemory/>
     <footer className="catalog-footer">NOVA · PRODUCT OPERATIONS OS <span>Phase 1 · Local catalog foundation</span></footer>
   </main>
 }
