@@ -18,7 +18,7 @@ jobs:
   validate:
     name: Lint and production build
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 25
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -35,3 +35,13 @@ jobs:
         run: npm test
       - name: TypeScript and production build
         run: npm run build
+      - name: Install Playwright and Chromium
+        run: |
+          npm install --no-save --package-lock=false playwright@1.56.1
+          npx playwright install --with-deps chromium
+      - name: Start production preview
+        run: npm run preview -- --host 127.0.0.1 > /tmp/nova-preview.log 2>&1 &
+      - name: Wait for production preview
+        run: npx wait-on http://127.0.0.1:4173
+      - name: Browser smoke tests
+        run: node tests/browser-smoke.mjs
