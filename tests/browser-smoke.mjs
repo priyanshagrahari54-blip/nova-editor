@@ -37,6 +37,7 @@ try {
     buffer: Buffer.from(pngBase64, 'base64'),
   })
   await page.getByText('1 media file imported').waitFor()
+  await page.getByRole('button', { name: 'Media', exact: true }).click()
   await page.getByRole('button', { name: 'browser-smoke.png' }).waitFor()
   await page.locator('.save-button').click()
   await page.getByText('Project saved locally with 1 media file.').waitFor()
@@ -44,6 +45,7 @@ try {
   await page.getByRole('button', { name: 'Projects', exact: true }).click()
   await page.getByRole('button', { name: 'Restore saved settings & layers' }).click()
   await page.getByText('Project restored with 1 media file.').waitFor()
+  await page.getByRole('button', { name: 'Media', exact: true }).click()
   await page.getByRole('button', { name: 'browser-smoke.png' }).waitFor()
 
   // Produce a small real WebM in Chromium, then verify video Blob persistence.
@@ -72,6 +74,7 @@ try {
     mimeType: 'video/webm',
     buffer: Buffer.from(videoBytes),
   })
+  await page.getByText('1 media file imported').waitFor()
   await page.getByRole('button', { name: 'browser-smoke.webm' }).waitFor()
   await page.locator('.save-button').click()
   await page.getByText('Project saved locally with 2 media files.').waitFor()
@@ -79,8 +82,10 @@ try {
   await page.getByRole('button', { name: 'Projects', exact: true }).click()
   await page.getByRole('button', { name: 'Restore saved settings & layers' }).click()
   await page.getByText('Project restored with 2 media files.').waitFor()
+  await page.getByRole('button', { name: 'Media', exact: true }).click()
   await page.getByRole('button', { name: 'browser-smoke.webm' }).waitFor()
   await page.locator('video').waitFor()
+  await page.getByRole('button', { name: 'Projects', exact: true }).click()
 
   // Legacy/malformed stored asset metadata should be skipped, not crash restore.
   await page.evaluate(async () => {
