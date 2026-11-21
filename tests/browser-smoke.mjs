@@ -118,7 +118,17 @@ try {
   await page.getByRole('button', { name: 'Restore saved settings & layers' }).click()
   await page.getByText('Project settings and layers restored; no saved media files were available.').waitFor()
 
-  console.log('Browser smoke passed: toolbar undo/redo, image/video IndexedDB round-trip, malformed legacy asset handling.')
+  // Simulate browser quota exhaustion at the IndexedDB boundary and assert the user-facing recovery message.
+  await page.evaluate(() => {
+    Object.defineProperty(window, 'indexedDB', {
+      configurable: true,
+      value: { open() { throw new DOMException('Simulated quota exhaustion', 'QuotaExceededError') } },
+    })
+  })
+  await page.locator('.save-button').click()
+  await page.getByText('Browser storage is full. Remove large media files or free browser storage, then save again.').waitFor()
+
+  console.log('Browser smoke passed: toolbar + keyboard undo/redo, image/video IndexedDB round-trip, malformed legacy data, and quota recovery message.')
   await context.close()
 } finally {
   await browser.close()
