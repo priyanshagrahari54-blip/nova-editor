@@ -83,7 +83,7 @@ try {
   await page.getByRole('button', { name: 'Restore saved settings & layers' }).click()
   await page.getByText('Project restored with 2 media files.').waitFor()
   await page.getByRole('button', { name: 'Media', exact: true }).click()
-  await page.getByRole('button', { name: 'browser-smoke.webm' }).waitFor()
+  await page.getByRole('button', { name: 'browser-smoke.webm' }).click()
   await page.locator('video').waitFor()
   await page.getByRole('button', { name: 'Projects', exact: true }).click()
 
