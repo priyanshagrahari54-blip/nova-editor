@@ -21,20 +21,30 @@ try {
   assert.equal(await page.locator('.layer-row').count(), 1, 'Redo should restore the text layer')
 
   // Image: import -> save to IndexedDB -> reload -> restore.
-  const svg = Buffer.from('<svg xmlns="http://www.w3.org/2000/svg" width="64" height="48"><rect width="64" height="48" fill="#2563eb"/></svg>')
-  await page.locator('input[type="file"]').setInputFiles({
-    name: 'browser-smoke.svg',
-    mimeType: 'image/svg+xml',
-    buffer: svg,
+  const pngBase64 = await page.evaluate(() => {
+    const canvas = document.createElement('canvas')
+    canvas.width = 64
+    canvas.height = 48
+    const ctx = canvas.getContext('2d')
+    if (!ctx) throw new Error('Canvas 2D context is unavailable')
+    ctx.fillStyle = '#2563eb'
+    ctx.fillRect(0, 0, 64, 48)
+    return canvas.toDataURL('image/png').split(',')[1]
   })
-  await page.getByRole('button', { name: 'browser-smoke.svg' }).waitFor()
+  await page.locator('input[type="file"]').setInputFiles({
+    name: 'browser-smoke.png',
+    mimeType: 'image/png',
+    buffer: Buffer.from(pngBase64, 'base64'),
+  })
+  await page.getByText('1 media file imported').waitFor()
+  await page.getByRole('button', { name: 'browser-smoke.png' }).waitFor()
   await page.locator('.save-button').click()
   await page.getByText('Project saved locally with 1 media file.').waitFor()
   await page.reload({ waitUntil: 'domcontentloaded' })
   await page.getByRole('button', { name: 'Projects', exact: true }).click()
   await page.getByRole('button', { name: 'Restore saved settings & layers' }).click()
   await page.getByText('Project restored with 1 media file.').waitFor()
-  await page.getByRole('button', { name: 'browser-smoke.svg' }).waitFor()
+  await page.getByRole('button', { name: 'browser-smoke.png' }).waitFor()
 
   // Produce a small real WebM in Chromium, then verify video Blob persistence.
   const videoBytes = await page.evaluate(async () => {
