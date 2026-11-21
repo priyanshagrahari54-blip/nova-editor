@@ -1,7 +1,7 @@
 import { ChangeEvent, DragEvent, useEffect, useMemo, useRef, useState } from 'react'
 import { Aperture, Check, ChevronDown, Download, Eye, EyeOff, Film, FlipHorizontal, FlipVertical2, FolderOpen, Image as ImageIcon, Layers3, LoaderCircle, Lock, Maximize2, Mic2, MoreHorizontal, Pause, Play, Plus, Redo2, RotateCcw, RotateCw, Save, Settings2, SlidersHorizontal, Sparkles, Type, Undo2, Upload, Video, Volume2, VolumeX, Wand2, X, ZoomIn, ZoomOut } from 'lucide-react'
 import { createPlan, createPowerfulPlan } from './lib/ai'
-import { recentProjects, saveProject } from './lib/projectDb'
+import { loadProject, recentProjects, saveProject } from './lib/projectDb'
 import { PHOTO_ADJUSTMENT_DEFAULTS } from './lib/photoAdjustments'
 import { cropForAspect, cropRectFromSettings, cropRectsEqual, cropSettings, FULL_CROP, signedRotation, type CropAspect, type CropRect } from './lib/photoGeometry'
 import { PhotoCanvas } from './components/PhotoCanvas'
@@ -10,6 +10,7 @@ import { AIStudio } from './components/AIStudio'
 import { ProToolsDrawer } from './components/ProToolsDrawer'
 import { ProfessionalTimeline } from './components/ProfessionalTimeline'
 import { ExportStudio } from './components/ExportStudio'
+import { HistoryManager } from './history/historyManager'
 import './App.css'
 import './components/ProWorkspace.css'
 
@@ -39,8 +40,8 @@ function App() {
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [settings, setSettings] = useState<Settings>(defaults)
   const [layers, setLayers] = useState<Layer[]>([])
-  const [history, setHistory] = useState<Snapshot[]>([])
-  const [future, setFuture] = useState<Snapshot[]>([])
+  const [historyManager] = useState(() => new HistoryManager<Snapshot>({ settings, layers }, { maxEntries: 100 }))
+  const [, refreshHistory] = useState(0)
   const [panel, setPanel] = useState<'Media' | 'Projects' | 'Photos' | 'Videos' | 'Audio' | 'Templates' | 'AI' | 'Effects' | 'Text' | 'Elements'>('Media')
   const [isPlaying, setIsPlaying] = useState(false)
   const [timelineTime, setTimelineTime] = useState(0)
@@ -69,12 +70,42 @@ function App() {
   useEffect(() => { if (!toast) return; const id = window.setTimeout(() => setToast(''), 3200); return () => window.clearTimeout(id) }, [toast])
   useEffect(() => () => { objectUrlsRef.current.forEach(url => URL.revokeObjectURL(url)); objectUrlsRef.current.clear() }, [])
 
-  const commit = (next: Partial<Settings>, nextLayers = layers) => { gestureStartRef.current = null; setHistory(value => [...value.slice(-30), { settings, layers }]); setFuture([]); setSettings(value => ({ ...value, ...next })); if (nextLayers !== layers) setLayers(nextLayers) }
-  const undo = () => { gestureStartRef.current = null; const last = history.at(-1); if (!last) return; setFuture(value => [{ settings, layers }, ...value]); setHistory(value => value.slice(0, -1)); setSettings(last.settings); setLayers(last.layers) }
-  const redo = () => { gestureStartRef.current = null; const next = future[0]; if (!next) return; setHistory(value => [...value, { settings, layers }]); setFuture(value => value.slice(1)); setSettings(next.settings); setLayers(next.layers) }
+  const recordSnapshot = (name: string, nextSettings: Settings, nextLayers: Layer[], source: 'user' | 'ai' | 'system' = 'user', coalesceKey?: string) => {
+    historyManager.record(name, { settings: nextSettings, layers: nextLayers }, { source, description: name, coalesceKey })
+    refreshHistory(value => value + 1)
+  }
+  const updateLayersWithHistory = (name: string, updater: (current: Layer[]) => Layer[], coalesceKey?: string) => {
+    const nextLayers = updater(layers)
+    if (JSON.stringify(nextLayers) === JSON.stringify(layers)) return
+    recordSnapshot(name, settings, nextLayers, 'user', coalesceKey)
+    setLayers(nextLayers)
+  }
+  const commit = (next: Partial<Settings>, nextLayers = layers) => {
+    gestureStartRef.current = null
+    const nextSettings = { ...settings, ...next }
+    recordSnapshot('Edit settings', nextSettings, nextLayers)
+    setSettings(nextSettings)
+    if (nextLayers !== layers) setLayers(nextLayers)
+  }
+  const undo = () => {
+    gestureStartRef.current = null
+    const snapshot = historyManager.undo()
+    if (!snapshot) return
+    setSettings(snapshot.settings)
+    setLayers(snapshot.layers)
+    refreshHistory(value => value + 1)
+  }
+  const redo = () => {
+    gestureStartRef.current = null
+    const snapshot = historyManager.redo()
+    if (!snapshot) return
+    setSettings(snapshot.settings)
+    setLayers(snapshot.layers)
+    refreshHistory(value => value + 1)
+  }
   const beginAdjustment = () => { if (!gestureStartRef.current) { gestureStartRef.current = { settings, layers }; gestureLatestSettingsRef.current = settings } }
   const previewAdjustment = (key: AdjustmentKey, value: number) => setSettings(current => { const next = { ...current, [key]: value }; gestureLatestSettingsRef.current = next; return next })
-  const finishAdjustment = () => { const start = gestureStartRef.current; const latest = gestureLatestSettingsRef.current; gestureStartRef.current = null; if (!start || sameSettings(start.settings, latest) && start.layers === layers) return; setHistory(value => [...value.slice(-30), start]); setFuture([]) }
+  const finishAdjustment = () => { const start = gestureStartRef.current; const latest = gestureLatestSettingsRef.current; gestureStartRef.current = null; if (!start || sameSettings(start.settings, latest) && start.layers === layers) return; recordSnapshot('Adjust settings', latest, layers) }
   const changeZoom = (amount: number) => setSettings(current => ({ ...current, zoom: Math.max(20, Math.min(300, current.zoom + amount)) }))
   const resetView = () => { setSettings(current => ({ ...current, zoom: 100 })); setViewResetToken(value => value + 1) }
   const resetAdjustments = () => { commit(PHOTO_ADJUSTMENT_DEFAULTS); setBefore(false) }
@@ -107,26 +138,114 @@ function App() {
     }))
     const items = imported.filter((item): item is Media => item !== null)
     if (!items.length) { setToast('The selected image could not be decoded.'); return }
-    setMedia(value => [...value, ...items]); setSelectedId(items[0].id); setLayers(value => [...items.map(item => ({ id: crypto.randomUUID(), name: item.name, type: 'Media' as const, visible: true, locked: false, opacity: 100 })), ...value]); setToast(`${items.length} media file${items.length > 1 ? 's' : ''} imported`)
+    const nextLayers = [...items.map(item => ({ id: crypto.randomUUID(), name: item.name, type: 'Media' as const, visible: true, locked: false, opacity: 100 })), ...layers]
+    setMedia(value => [...value, ...items])
+    setSelectedId(items[0].id)
+    setLayers(nextLayers)
+    historyManager.reset({ settings, layers: nextLayers })
+    refreshHistory(value => value + 1)
+    setToast(`${items.length} media file${items.length > 1 ? 's' : ''} imported`)
   }
   const onFileInputChange = (event: ChangeEvent<HTMLInputElement>) => { void importFiles(event.currentTarget.files); event.currentTarget.value = '' }
   const updateMediaDimensions = (id: string, width: number, height: number) => setMedia(items => { const active = items.find(item => item.id === id); if (!active || active.width === width && active.height === height) return items; return items.map(item => item.id === id ? { ...item, width, height } : item) })
   const onDrop = (event: DragEvent) => { event.preventDefault(); void importFiles(event.dataTransfer.files) }
-  const persistProject = async () => { setSaving(true); try { await saveProject({ id: 'active-project', name: 'Campaign 2025', updatedAt: Date.now(), settings: { settings, layers, assets: media.map(item => ({ name: item.name, kind: item.kind })) } }); setSaved(value => ['Campaign 2025', ...value.filter(item => item !== 'Campaign 2025')]); setToast('Project metadata saved locally') } catch { setToast('Local storage is unavailable in this browser.') } finally { setSaving(false) } }
+  const persistProject = async () => {
+    setSaving(true)
+    try {
+      await saveProject({
+        id: 'active-project',
+        name: 'Campaign 2025',
+        updatedAt: Date.now(),
+        settings: {
+          settings,
+          layers,
+          assets: media.map(item => ({
+            id: item.id,
+            name: item.name,
+            kind: item.kind,
+            file: item.file,
+            width: item.width,
+            height: item.height,
+          })),
+        },
+      })
+      setSaved(value => ['Campaign 2025', ...value.filter(item => item !== 'Campaign 2025')])
+      setToast(`Project saved locally with ${media.length} media file${media.length === 1 ? '' : 's'}.`)
+    } catch (error) {
+      const quotaExceeded = error instanceof DOMException && (error.name === 'QuotaExceededError' || error.name === 'NS_ERROR_DOM_QUOTA_REACHED')
+      setToast(quotaExceeded
+        ? 'Browser storage is full. Remove large media files or free browser storage, then save again.'
+        : 'Could not save the project locally in this browser.')
+    } finally {
+      setSaving(false)
+    }
+  }
+  const loadSavedProject = async () => {
+    setSaving(true)
+    const createdUrls: string[] = []
+    try {
+      const project = await loadProject('active-project')
+      if (!project) { setToast('No saved project was found on this device.'); return }
+      const payload = project.settings as {
+        settings?: Partial<Settings>
+        layers?: Layer[]
+        assets?: Array<{ id?: string; name?: string; kind?: string; file?: Blob; width?: number; height?: number }>
+      }
+      const nextSettings = { ...defaults, ...(payload.settings ?? {}) }
+      const nextLayers = Array.isArray(payload.layers) ? payload.layers : []
+      const restoredMedia: Media[] = []
+      for (const asset of Array.isArray(payload.assets) ? payload.assets : []) {
+        if (typeof asset.name !== 'string' || !asset.name.trim() ||
+            !(asset.file instanceof Blob) || !['image', 'video'].includes(asset.kind ?? '')) continue
+        const kind = asset.kind as Media['kind']
+        const file = asset.file instanceof File
+          ? asset.file
+          : new File([asset.file], asset.name, { type: asset.file.type || (kind === 'image' ? 'image/jpeg' : 'video/mp4') })
+        const url = createMediaUrl(file)
+        createdUrls.push(url)
+        restoredMedia.push({
+          id: typeof asset.id === 'string' && asset.id ? asset.id : crypto.randomUUID(),
+          name: asset.name,
+          kind,
+          url,
+          file,
+          ...(typeof asset.width === 'number' && Number.isFinite(asset.width) && asset.width > 0 ? { width: asset.width } : {}),
+          ...(typeof asset.height === 'number' && Number.isFinite(asset.height) && asset.height > 0 ? { height: asset.height } : {}),
+        })
+      }
+      media.forEach(item => releaseMediaUrl(item.url))
+      setMedia(restoredMedia)
+      setSettings(nextSettings)
+      setLayers(nextLayers)
+      setSelectedId(restoredMedia[0]?.id ?? null)
+      setIsPlaying(false)
+      historyManager.reset({ settings: nextSettings, layers: nextLayers })
+      refreshHistory(value => value + 1)
+      setSaved(value => [project.name, ...value.filter(name => name !== project.name)])
+      setToast(restoredMedia.length
+        ? `Project restored with ${restoredMedia.length} media file${restoredMedia.length === 1 ? '' : 's'}.`
+        : 'Project settings and layers restored; no saved media files were available.')
+    } catch {
+      createdUrls.forEach(url => releaseMediaUrl(url))
+      setToast('Could not load the saved project from local storage.')
+    } finally {
+      setSaving(false)
+    }
+  }
   const togglePlayback = () => { const video = videoRef.current; if (!video) return; if (video.paused) { void video.play().then(() => setIsPlaying(true)).catch(() => { setIsPlaying(false); setToast('The browser could not start video playback.') }) } else { video.pause(); setIsPlaying(false) } }
-  const addText = () => { const layer = { id: crypto.randomUUID(), name: 'Title text', type: 'Text' as const, visible: true, locked: false, opacity: 100, text: 'NOVA TITLE' }; setHistory(value => [...value, { settings, layers }]); setLayers(value => [layer, ...value]); setToast('Editable text layer added.') }
+  const addText = () => { const layer = { id: crypto.randomUUID(), name: 'Title text', type: 'Text' as const, visible: true, locked: false, opacity: 100, text: 'NOVA TITLE' }; const nextLayers = [layer, ...layers]; recordSnapshot('Add text layer', settings, nextLayers); setLayers(nextLayers); setToast('Editable text layer added.') }
   const planAgent = async () => { if (!agentPrompt.trim()) return; try { setAgentPlan(await createPowerfulPlan({ operation: selected?.kind === 'video' ? 'editVideo' : 'editImage', prompt: agentPrompt, preserve, assetName: selected?.name })) } catch { setAgentPlan(createPlan(agentPrompt, preserve)) } }
   useEffect(() => { const key = (event: KeyboardEvent) => { const target = event.target as HTMLElement | null; const isEditorRange = target instanceof HTMLInputElement && target.type === 'range'; const isTyping = (target?.matches('input, textarea, select, [contenteditable="true"]') ?? false) && !isEditorRange; const modifier = event.metaKey || event.ctrlKey; if (modifier && event.key.toLowerCase() === 'z' && !isTyping) { event.preventDefault(); if (event.shiftKey) redo(); else undo() } if (modifier && event.key.toLowerCase() === 'y' && !isTyping) { event.preventDefault(); redo() } if (modifier && event.key.toLowerCase() === 's') { event.preventDefault(); void persistProject() } if (event.code === 'Space' && selected?.kind === 'video' && !isTyping) { event.preventDefault(); togglePlayback() } }; window.addEventListener('keydown', key, true); return () => window.removeEventListener('keydown', key, true) })
   const selectedMediaLabel = useMemo(() => selected ? `${selected.kind === 'image' ? 'Photo' : 'Video'} · ${selected.name}${selected.kind === 'image' && selected.width && selected.height ? ` · ${selected.width} × ${selected.height}` : ''}` : 'No media selected', [selected])
 
   return <main className="nova-app" onDragOver={event => event.preventDefault()} onDrop={onDrop} onPointerUpCapture={event => { const target = event.target; if (target instanceof HTMLInputElement && target.type === 'range') target.blur() }}>
-    <header className="nova-topbar"><div className="nova-brand"><i><Sparkles size={16}/></i><b>NOVA</b><span>EDITOR</span></div><button className="project-title" onClick={() => setPanel('Projects')}><span>Campaign 2025</span><ChevronDown size={14}/></button><div className="top-actions"><button title="Undo (Ctrl/⌘ Z)" aria-label="Undo" onClick={undo} disabled={!history.length}><Undo2 size={16}/></button><button title="Redo" aria-label="Redo" onClick={redo} disabled={!future.length}><Redo2 size={16}/></button><button className="save-button" onClick={() => void persistProject()} disabled={saving}>{saving ? <LoaderCircle className="spin" size={15}/> : <Save size={15}/>} Save</button><button onClick={() => setPanel('AI')}><Sparkles size={15}/> AI</button><button onClick={togglePlayback} disabled={selected?.kind !== 'video'}>{isPlaying ? <Pause size={15}/> : <Play size={15}/>} Preview</button><button className="export-button" onClick={() => setExportOpen(true)}><Download size={15}/> Export</button><button title="Settings" aria-label="Settings" onClick={() => setToast('Keyboard: Ctrl/⌘+S save · Ctrl/⌘+Z undo · Space preview video')}><Settings2 size={16}/></button></div></header>
+    <header className="nova-topbar"><div className="nova-brand"><i><Sparkles size={16}/></i><b>NOVA</b><span>EDITOR</span></div><button className="project-title" onClick={() => setPanel('Projects')}><span>Campaign 2025</span><ChevronDown size={14}/></button><div className="top-actions"><button title="Undo (Ctrl/⌘ Z)" aria-label="Undo" onClick={undo} disabled={!historyManager.canUndo()}><Undo2 size={16}/></button><button title="Redo" aria-label="Redo" onClick={redo} disabled={!historyManager.canRedo()}><Redo2 size={16}/></button><button className="save-button" onClick={() => void persistProject()} disabled={saving}>{saving ? <LoaderCircle className="spin" size={15}/> : <Save size={15}/>} Save</button><button onClick={() => setPanel('AI')}><Sparkles size={15}/> AI</button><button onClick={togglePlayback} disabled={selected?.kind !== 'video'}>{isPlaying ? <Pause size={15}/> : <Play size={15}/>} Preview</button><button className="export-button" onClick={() => setExportOpen(true)}><Download size={15}/> Export</button><button title="Settings" aria-label="Settings" onClick={() => setToast('Keyboard: Ctrl/⌘+S save · Ctrl/⌘+Z undo · Space preview video')}><Settings2 size={16}/></button></div></header>
     <div className={`nova-workspace ${['AI', 'Photos', 'Effects', 'Audio'].includes(panel) ? 'ai-open' : ''}`}><aside className="primary-nav">{([['Media', FolderOpen], ['Projects', Layers3], ['Photos', ImageIcon], ['Videos', Video], ['Audio', Mic2], ['Templates', Aperture], ['AI', Sparkles], ['Effects', Wand2], ['Text', Type], ['Elements', Plus]] as const).map(([name, Icon]) => <button key={name} className={panel === name ? 'active' : ''} onClick={() => setPanel(name)}><Icon size={18}/><span>{name}</span></button>)}</aside>
-      <aside className="assets-panel"><div className="panel-heading"><div><span className="eyebrow">{panel.toUpperCase()}</span><h2>{panel === 'Media' ? 'Project assets' : panel}</h2></div><button aria-label="Add media" onClick={() => inputRef.current?.click()}><Plus size={16}/></button></div><input ref={inputRef} type="file" accept=".jpg,.jpeg,.png,.webp,.gif,.svg,.mp4,.webm,image/jpeg,image/png,image/webp,image/gif,image/svg+xml,video/mp4,video/webm" multiple hidden onChange={onFileInputChange}/>{panel === 'Media' && <><button className="import-media" onClick={() => inputRef.current?.click()}><Upload size={16}/> Import media</button>{media.length ? <div className="asset-grid">{media.map(item => <button key={item.id} className={selectedId === item.id ? 'selected' : ''} onClick={() => setSelectedId(item.id)}><span>{item.kind === 'image' ? <ImageIcon size={18}/> : <Film size={18}/>}</span><b>{item.name}</b><small>{item.kind === 'image' && item.width && item.height ? `${item.width} × ${item.height}` : item.kind}</small></button>)}</div> : <div className="empty-panel"><Upload size={25}/><b>Drop media here</b><p>JPG, PNG, WebP, GIF, SVG, MP4 and WebM are supported.</p></div>}</>}{panel === 'Projects' && <div className="project-list"><button className="project-card" onClick={() => void persistProject()}><b>Campaign 2025</b><small>{saved.includes('Campaign 2025') ? 'Saved locally' : 'Unsaved changes'}</small></button><p>Projects save metadata, edit settings, layers, and asset references in IndexedDB.</p></div>}{panel === 'Text' && <div className="tool-panel"><p>Add and edit text layers on the canvas.</p><button className="wide-action" onClick={addText}><Type size={16}/> Add text layer</button>{layers.filter(layer => layer.type === 'Text').map(layer => <label className="text-edit" key={layer.id}>Text<input value={layer.text || ''} onChange={event => setLayers(items => items.map(item => item.id === layer.id ? { ...item, text: event.target.value, name: event.target.value || 'Title text' } : item))}/></label>)}</div>}{panel === 'AI' && <div className="tool-panel"><p>AI operations use provider adapters. No cloud AI result is claimed until a provider is configured.</p><button className="wide-action" onClick={() => setAgentPlan(createPlan('Enhance active media', preserve))}><Sparkles size={16}/> Create enhancement plan</button></div>}{!['Media', 'Projects', 'Text', 'AI'].includes(panel) && <div className="empty-panel"><Aperture size={25}/><b>{panel} workspace</b><p>Select media, then use the right inspector and layers to edit.</p></div>}</aside>
+      <aside className="assets-panel"><div className="panel-heading"><div><span className="eyebrow">{panel.toUpperCase()}</span><h2>{panel === 'Media' ? 'Project assets' : panel}</h2></div><button aria-label="Add media" onClick={() => inputRef.current?.click()}><Plus size={16}/></button></div><input ref={inputRef} type="file" accept=".jpg,.jpeg,.png,.webp,.gif,.svg,.mp4,.webm,image/jpeg,image/png,image/webp,image/gif,image/svg+xml,video/mp4,video/webm" multiple hidden onChange={onFileInputChange}/>{panel === 'Media' && <><button className="import-media" onClick={() => inputRef.current?.click()}><Upload size={16}/> Import media</button>{media.length ? <div className="asset-grid">{media.map(item => <button key={item.id} className={selectedId === item.id ? 'selected' : ''} onClick={() => setSelectedId(item.id)}><span>{item.kind === 'image' ? <ImageIcon size={18}/> : <Film size={18}/>}</span><b>{item.name}</b><small>{item.kind === 'image' && item.width && item.height ? `${item.width} × ${item.height}` : item.kind}</small></button>)}</div> : <div className="empty-panel"><Upload size={25}/><b>Drop media here</b><p>JPG, PNG, WebP, GIF, SVG, MP4 and WebM are supported.</p></div>}</>}{panel === 'Projects' && <div className="project-list"><button className="project-card" onClick={() => void persistProject()}><b>Campaign 2025</b><small>{saved.includes('Campaign 2025') ? 'Saved locally' : 'Unsaved changes'}</small></button><button className="wide-action" onClick={() => void loadSavedProject()} disabled={saving}><FolderOpen size={16}/> Restore saved settings & layers</button><p>Settings, layers, and imported media files are stored in this browser. Large videos may exceed browser storage limits.</p></div>}{panel === 'Text' && <div className="tool-panel"><p>Add and edit text layers on the canvas.</p><button className="wide-action" onClick={addText}><Type size={16}/> Add text layer</button>{layers.filter(layer => layer.type === 'Text').map(layer => <label className="text-edit" key={layer.id}>Text<input value={layer.text || ''} onChange={event => updateLayersWithHistory('Edit text layer', items => items.map(item => item.id === layer.id ? { ...item, text: event.target.value, name: event.target.value || 'Title text' } : item), `text-${layer.id}`)}/></label>)}</div>}{panel === 'AI' && <div className="tool-panel"><p>AI operations use provider adapters. No cloud AI result is claimed until a provider is configured.</p><button className="wide-action" onClick={() => setAgentPlan(createPlan('Enhance active media', preserve))}><Sparkles size={16}/> Create enhancement plan</button></div>}{!['Media', 'Projects', 'Text', 'AI'].includes(panel) && <div className="empty-panel"><Aperture size={25}/><b>{panel} workspace</b><p>Select media, then use the right inspector and layers to edit.</p></div>}</aside>
       <section className="stage"><div className="stage-toolbar"><span>{selectedMediaLabel}</span><div><button title="Zoom out" aria-label="Zoom out" onClick={() => changeZoom(-10)}><ZoomOut size={15}/></button><span>{settings.zoom}%</span><button title="Zoom in" aria-label="Zoom in" onClick={() => changeZoom(10)}><ZoomIn size={15}/></button><button title="Fit image and reset pan" onClick={resetView}>Fit</button><button className={before ? 'on' : ''} aria-pressed={before} title={before ? 'Return to the current edited result' : 'Show the untouched original'} onClick={() => setBefore(value => !value)}>{before ? 'After' : 'Before'}</button></div></div><div className="canvas-zone">{selected ? <div className={`canvas-artboard ${selected.kind === 'image' ? 'photo-artboard' : ''}`}>{selected.kind === 'image' ? <PhotoCanvas src={selected.url} fileName={selected.name} settings={settings} before={before} layers={layers} resetViewToken={viewResetToken} cropMode={cropMode} cropRect={cropDraft ?? cropRectFromSettings(settings)} cropAspect={cropAspect} onImageReady={(width, height) => updateMediaDimensions(selected.id, width, height)} onCropChange={previewCrop}/> : <><video ref={videoRef} src={selected.url} style={{ filter: activeFilter, transform: before ? 'none' : `rotate(${settings.rotate}deg) scale(${settings.flip ? -1 : 1},${settings.flipVertical ? -1 : 1})` }} onLoadedMetadata={event => { setVideoDuration(event.currentTarget.duration); event.currentTarget.playbackRate = settings.speed; event.currentTarget.volume = Math.min(1, settings.volume / 100) }} onTimeUpdate={event => { const video = event.currentTarget; setTimelineTime(video.currentTime); const fadeIn = settings.fadeIn > 0 ? Math.min(1, video.currentTime / settings.fadeIn) : 1; const fadeOut = settings.fadeOut > 0 ? Math.min(1, (video.duration - video.currentTime) / settings.fadeOut) : 1; video.volume = Math.min(1, settings.volume / 100 * Math.min(fadeIn, fadeOut)) }} onEnded={() => setIsPlaying(false)} /><div className="video-effect-layer" style={{ '--vignette': before ? 0 : settings.vignette / 100, '--grain': before ? 0 : settings.grain / 260, '--fade': before ? 0 : settings.fade / 420 } as React.CSSProperties}/>{!before && settings.glow > 0 && <div className="video-glow" style={{ '--glow': `${settings.glow / 2}px` } as React.CSSProperties}/>}</>}{selected.kind === 'video' && !before && layers.filter(layer => layer.type === 'Text' && layer.visible).map(layer => <div key={layer.id} className="text-overlay" style={{ opacity: layer.opacity / 100 }}>{layer.text || 'NOVA TITLE'}</div>)}</div> : <div className="empty-canvas"><div><Sparkles size={29}/><h1>Start with an idea</h1><p>Drop JPG, PNG, WebP, GIF, SVG, MP4, or WebM media here to begin a non-destructive edit.</p><button onClick={() => inputRef.current?.click()}><Upload size={16}/> Import media</button></div></div>}</div>{selected?.kind === 'video' && <div className="video-controls"><button aria-label={isPlaying ? 'Pause video' : 'Play video'} onClick={togglePlayback}>{isPlaying ? <Pause size={17}/> : <Play size={17}/>}</button><input aria-label="Video position slider" type="range" min="0" max={videoDuration} step="0.01" value={timelineTime} onChange={event => { if (videoRef.current) { videoRef.current.currentTime = Number(event.target.value); setTimelineTime(Number(event.target.value)) } }}/><span>{timelineTime.toFixed(1)}s</span><button aria-label={settings.volume ? 'Mute audio' : 'Unmute audio'} onClick={() => { if (videoRef.current) { videoRef.current.muted = !videoRef.current.muted; setSettings(value => ({ ...value, volume: videoRef.current!.muted ? 0 : 100 })) } }}>{settings.volume ? <Volume2 size={16}/> : <VolumeX size={16}/>}</button></div>}</section>
-      <aside className="inspector"><div className="inspector-tabs"><button className="active">Adjust</button><button onClick={() => setPanel('AI')}>AI</button><button onClick={() => setPanel('Effects')}>Effects</button></div><section><div className="section-title"><b>Quick presets</b><Wand2 size={14}/></div><div className="transform-actions">{quickPresets.map(preset => <button key={preset.name} onClick={() => { commit(preset.settings); setToast(`${preset.name} preset applied`) }}>{preset.name}</button>)}</div></section><section><div className="section-title"><b>Transform</b><button onClick={resetPhotoEdits}><RotateCcw size={14}/> Reset all</button></div><div className="transform-actions"><button onClick={() => commit({ rotate: signedRotation(settings.rotate - 90) })}><RotateCcw size={15}/> 90° CCW</button><button onClick={() => commit({ rotate: signedRotation(settings.rotate + 90) })}><RotateCw size={15}/> 90° CW</button><button onClick={() => commit({ flip: !settings.flip })}><FlipHorizontal size={15}/> Flip H</button><button onClick={() => commit({ flipVertical: !settings.flipVertical })}><FlipVertical2 size={15}/> Flip V</button><button className="wide-transform" onClick={resetView}><Maximize2 size={15}/> Reset view</button></div>{selected?.kind === 'image' && <PhotoTransformControls cropMode={cropMode} cropAspect={cropAspect} rotation={signedRotation(settings.rotate)} onRotate180={() => commit({ rotate: signedRotation(settings.rotate + 180) })} onToggleCrop={cropMode ? cancelCrop : openCrop} onApplyCrop={applyCrop} onCancelCrop={cancelCrop} onAspectChange={changeCropAspect} onResetCrop={resetCrop} onRotationStart={beginAdjustment} onRotationChange={previewRotation} onRotationEnd={finishAdjustment} onResetAdjustments={resetAdjustments} onResetTransform={resetTransform} onResetAll={resetPhotoEdits}/>}</section><section><div className="section-title"><b>Light & color</b><SlidersHorizontal size={14}/></div>{adjustmentControls.map(([key, label, min, max, step]) => <label className="range-control" key={key}><span>{label}</span><output>{settings[key]}{key !== 'blur' ? '%' : 'px'}</output><input type="range" min={min} max={max} step={step} value={settings[key]} onPointerDown={beginAdjustment} onPointerUp={finishAdjustment} onPointerCancel={finishAdjustment} onKeyDown={beginAdjustment} onKeyUp={finishAdjustment} onBlur={finishAdjustment} onChange={event => previewAdjustment(key, Number(event.target.value))}/></label>)}</section>{selected?.kind === 'video' && <section><div className="section-title"><b>Video canvas & aspect</b><Film size={14}/></div><div className="transform-actions"><button onClick={() => changeCropAspect('16:9')}>16:9 Landscape</button><button onClick={() => changeCropAspect('9:16')}>9:16 Shorts/Reels</button><button onClick={() => changeCropAspect('1:1')}>1:1 Square</button><button onClick={() => changeCropAspect('free')}>21:9 Cinema</button></div><div className="section-title"><b>Video & audio</b><Volume2 size={14}/></div><label className="range-control"><span>Speed</span><output>{settings.speed}×</output><input type="range" min="0.25" max="2" step="0.25" value={settings.speed} onChange={event => { const speed = Number(event.target.value); if (videoRef.current) videoRef.current.playbackRate = speed; commit({ speed }) }}/></label><label className="range-control"><span>Volume</span><output>{settings.volume}%</output><input type="range" min="0" max="100" value={settings.volume} onChange={event => { const volume = Number(event.target.value); if (videoRef.current) { videoRef.current.volume = volume / 100; videoRef.current.muted = volume === 0 }; commit({ volume }) }}/></label></section>}<section className="layers-section"><div className="section-title"><b>Layers</b><button onClick={addText}><Plus size={14}/></button></div>{layers.map(layer => <div className="layer-row" key={layer.id}><button onClick={() => setLayers(items => items.map(item => item.id === layer.id ? { ...item, visible: !item.visible } : item))}>{layer.visible ? <Eye size={14}/> : <EyeOff size={14}/>}</button><span><b>{layer.name}</b><small>{layer.type}</small></span><button onClick={() => setLayers(items => items.map(item => item.id === layer.id ? { ...item, locked: !item.locked } : item))}>{layer.locked ? <Lock size={13}/> : <MoreHorizontal size={15}/>}</button></div>)}</section></aside>
+      <aside className="inspector"><div className="inspector-tabs"><button className="active">Adjust</button><button onClick={() => setPanel('AI')}>AI</button><button onClick={() => setPanel('Effects')}>Effects</button></div><section><div className="section-title"><b>Quick presets</b><Wand2 size={14}/></div><div className="transform-actions">{quickPresets.map(preset => <button key={preset.name} onClick={() => { commit(preset.settings); setToast(`${preset.name} preset applied`) }}>{preset.name}</button>)}</div></section><section><div className="section-title"><b>Transform</b><button onClick={resetPhotoEdits}><RotateCcw size={14}/> Reset all</button></div><div className="transform-actions"><button onClick={() => commit({ rotate: signedRotation(settings.rotate - 90) })}><RotateCcw size={15}/> 90° CCW</button><button onClick={() => commit({ rotate: signedRotation(settings.rotate + 90) })}><RotateCw size={15}/> 90° CW</button><button onClick={() => commit({ flip: !settings.flip })}><FlipHorizontal size={15}/> Flip H</button><button onClick={() => commit({ flipVertical: !settings.flipVertical })}><FlipVertical2 size={15}/> Flip V</button><button className="wide-transform" onClick={resetView}><Maximize2 size={15}/> Reset view</button></div>{selected?.kind === 'image' && <PhotoTransformControls cropMode={cropMode} cropAspect={cropAspect} rotation={signedRotation(settings.rotate)} onRotate180={() => commit({ rotate: signedRotation(settings.rotate + 180) })} onToggleCrop={cropMode ? cancelCrop : openCrop} onApplyCrop={applyCrop} onCancelCrop={cancelCrop} onAspectChange={changeCropAspect} onResetCrop={resetCrop} onRotationStart={beginAdjustment} onRotationChange={previewRotation} onRotationEnd={finishAdjustment} onResetAdjustments={resetAdjustments} onResetTransform={resetTransform} onResetAll={resetPhotoEdits}/>}</section><section><div className="section-title"><b>Light & color</b><SlidersHorizontal size={14}/></div>{adjustmentControls.map(([key, label, min, max, step]) => <label className="range-control" key={key}><span>{label}</span><output>{settings[key]}{key !== 'blur' ? '%' : 'px'}</output><input type="range" min={min} max={max} step={step} value={settings[key]} onPointerDown={beginAdjustment} onPointerUp={finishAdjustment} onPointerCancel={finishAdjustment} onKeyDown={beginAdjustment} onKeyUp={finishAdjustment} onBlur={finishAdjustment} onChange={event => previewAdjustment(key, Number(event.target.value))}/></label>)}</section>{selected?.kind === 'video' && <section><div className="section-title"><b>Video canvas & aspect</b><Film size={14}/></div><div className="transform-actions"><button onClick={() => changeCropAspect('16:9')}>16:9 Landscape</button><button onClick={() => changeCropAspect('9:16')}>9:16 Shorts/Reels</button><button onClick={() => changeCropAspect('1:1')}>1:1 Square</button><button onClick={() => changeCropAspect('free')}>21:9 Cinema</button></div><div className="section-title"><b>Video & audio</b><Volume2 size={14}/></div><label className="range-control"><span>Speed</span><output>{settings.speed}×</output><input type="range" min="0.25" max="2" step="0.25" value={settings.speed} onChange={event => { const speed = Number(event.target.value); if (videoRef.current) videoRef.current.playbackRate = speed; commit({ speed }) }}/></label><label className="range-control"><span>Volume</span><output>{settings.volume}%</output><input type="range" min="0" max="100" value={settings.volume} onChange={event => { const volume = Number(event.target.value); if (videoRef.current) { videoRef.current.volume = volume / 100; videoRef.current.muted = volume === 0 }; commit({ volume }) }}/></label></section>}<section className="layers-section"><div className="section-title"><b>Layers</b><button onClick={addText}><Plus size={14}/></button></div>{layers.map(layer => <div className="layer-row" key={layer.id}><button onClick={() => updateLayersWithHistory(layer.visible ? 'Hide layer' : 'Show layer', items => items.map(item => item.id === layer.id ? { ...item, visible: !item.visible } : item))}>{layer.visible ? <Eye size={14}/> : <EyeOff size={14}/>}</button><span><b>{layer.name}</b><small>{layer.type}</small></span><button onClick={() => updateLayersWithHistory(layer.locked ? 'Unlock layer' : 'Lock layer', items => items.map(item => item.id === layer.id ? { ...item, locked: !item.locked } : item))}>{layer.locked ? <Lock size={13}/> : <MoreHorizontal size={15}/>}</button></div>)}</section></aside>
     </div>
-    {panel === 'AI' && <aside className="ai-studio-drawer"><AIStudio asset={selected ? { name: selected.name, kind: selected.kind, url: selected.url } : null} settings={settings} preserve={preserve} onPreserveChange={setPreserve} onOpenMedia={() => inputRef.current?.click()} onNotice={setToast} onApply={(name, next) => { commit(next); setToast(`${name} applied as an editable look`) }}/></aside>}
+    {panel === 'AI' && <aside className="ai-studio-drawer"><AIStudio asset={selected ? { name: selected.name, kind: selected.kind, url: selected.url } : null} settings={settings} preserve={preserve} onPreserveChange={setPreserve} onOpenMedia={() => inputRef.current?.click()} onNotice={setToast} onApply={(name, next) => { historyManager.record(name, { settings: { ...settings, ...next }, layers }, { source: 'ai', description: `AI edit: ${name}` }); refreshHistory(value => value + 1); setSettings(value => ({ ...value, ...next })); setToast(`${name} applied as an editable look`) }}/></aside>}
     {(panel === 'Photos' || panel === 'Effects' || panel === 'Audio') && <ProToolsDrawer key={panel} initialTab={panel === 'Photos' ? 'color' : panel === 'Audio' ? 'audio' : 'vfx'} settings={settings} isVideo={selected?.kind === 'video'} onCommit={commit} onReset={resetAdjustments} onNotice={setToast}/>}
     {selected?.kind === 'video' && videoDuration > 0 && <ProfessionalTimeline key={selected.id} assetName={selected.name} duration={videoDuration} currentTime={timelineTime} playing={isPlaying} onPlayToggle={togglePlayback} onSeek={time => { if (videoRef.current) videoRef.current.currentTime = time; setTimelineTime(time) }} onNotice={setToast}/>} 
     <section className="agent-bar"><div><Wand2 size={17}/><input value={agentPrompt} onChange={event => setAgentPrompt(event.target.value)} onKeyDown={event => { if (event.key === 'Enter') planAgent() }} placeholder="Ask Nova to plan an edit — e.g. Make this photo cinematic, without changing the face."/><button onClick={planAgent}>Create plan</button></div>{agentPlan && <article><button aria-label="Dismiss AI plan" onClick={() => setAgentPlan(null)}><X size={14}/></button><b>{agentPlan.title}</b>{agentPlan.steps.map((step, index) => <span key={step}><i>{index + 1}</i>{step}</span>)}<small>Provider required: connect a secure AI backend before applying AI operations.</small></article>}</section>
