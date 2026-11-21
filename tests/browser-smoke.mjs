@@ -19,6 +19,10 @@ try {
   assert.equal(await page.locator('.layer-row').count(), 0, 'Undo should remove the text layer')
   await page.getByRole('button', { name: 'Redo' }).click()
   assert.equal(await page.locator('.layer-row').count(), 1, 'Redo should restore the text layer')
+  await page.keyboard.press('Control+z')
+  assert.equal(await page.locator('.layer-row').count(), 0, 'Ctrl+Z should undo the text layer')
+  await page.keyboard.press('Control+y')
+  assert.equal(await page.locator('.layer-row').count(), 1, 'Ctrl+Y should redo the text layer')
 
   // Image: import -> save to IndexedDB -> reload -> restore.
   const pngBase64 = await page.evaluate(() => {
