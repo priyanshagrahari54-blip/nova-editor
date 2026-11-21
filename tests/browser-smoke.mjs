@@ -67,12 +67,15 @@ try {
     recorder.stop()
     await stopped
     stream.getTracks().forEach(track => track.stop())
-    return await new Blob(chunks, { type: recorder.mimeType }).arrayBuffer()
+    const bytes = new Uint8Array(await new Blob(chunks, { type: recorder.mimeType }).arrayBuffer())
+    let binary = ''
+    bytes.forEach(byte => { binary += String.fromCharCode(byte) })
+    return btoa(binary)
   })
   await page.locator('input[type="file"]').setInputFiles({
     name: 'browser-smoke.webm',
     mimeType: 'video/webm',
-    buffer: Buffer.from(videoBytes),
+    buffer: Buffer.from(videoBytes, 'base64'),
   })
   await page.getByText('1 media file imported').waitFor()
   await page.getByRole('button', { name: 'browser-smoke.webm' }).waitFor()
