@@ -47,9 +47,9 @@ try {
     ctx.fillRect(0, 0, 32, 32)
     const stream = canvas.captureStream(5)
     const recorder = new MediaRecorder(stream, { mimeType: 'video/webm;codecs=vp8' })
-    const chunks: BlobPart[] = []
+    const chunks = []
     recorder.ondataavailable = event => { if (event.data.size) chunks.push(event.data) }
-    const stopped = new Promise<void>(resolve => { recorder.onstop = () => resolve() })
+    const stopped = new Promise(resolve => { recorder.onstop = () => resolve() })
     recorder.start()
     await new Promise(resolve => setTimeout(resolve, 500))
     recorder.stop()
@@ -64,22 +64,22 @@ try {
   })
   await page.getByRole('button', { name: 'browser-smoke.webm' }).waitFor()
   await page.locator('.save-button').click()
-  await page.getByText('Project saved locally with 1 media file.').waitFor()
+  await page.getByText('Project saved locally with 2 media files.').waitFor()
   await page.reload({ waitUntil: 'networkidle' })
   await page.getByRole('button', { name: 'Projects', exact: true }).click()
   await page.getByRole('button', { name: 'Restore saved settings & layers' }).click()
-  await page.getByText('Project restored with 1 media file.').waitFor()
+  await page.getByText('Project restored with 2 media files.').waitFor()
   await page.getByRole('button', { name: 'browser-smoke.webm' }).waitFor()
   await page.locator('video').waitFor()
 
   // Legacy/malformed stored asset metadata should be skipped, not crash restore.
   await page.evaluate(async () => {
     const request = indexedDB.open('nova-editor-db', 1)
-    const db = await new Promise<IDBDatabase>((resolve, reject) => {
+    const db = await new Promise((resolve, reject) => {
       request.onsuccess = () => resolve(request.result)
       request.onerror = () => reject(request.error)
     })
-    await new Promise<void>((resolve, reject) => {
+    await new Promise((resolve, reject) => {
       const tx = db.transaction('projects', 'readwrite')
       tx.objectStore('projects').put({
         id: 'active-project',
