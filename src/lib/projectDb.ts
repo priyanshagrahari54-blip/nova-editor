@@ -6,14 +6,30 @@ const STORE = 'projects'
 function database() {
   return new Promise<IDBDatabase>((resolve, reject) => {
     const request = indexedDB.open(DB_NAME, 1)
+    let settled = false
     request.onupgradeneeded = () => {
       if (!request.result.objectStoreNames.contains(STORE)) {
         request.result.createObjectStore(STORE, { keyPath: 'id' })
       }
     }
-    request.onsuccess = () => resolve(request.result)
-    request.onerror = () => reject(request.error ?? new Error('Could not open project database.'))
-    request.onblocked = () => reject(new Error('Project database upgrade is blocked by another open tab.'))
+    request.onsuccess = () => {
+      if (settled) {
+        request.result.close()
+        return
+      }
+      settled = true
+      resolve(request.result)
+    }
+    request.onerror = () => {
+      if (settled) return
+      settled = true
+      reject(request.error ?? new Error('Could not open project database.'))
+    }
+    request.onblocked = () => {
+      if (settled) return
+      settled = true
+      reject(new Error('Project database upgrade is blocked by another open tab. Close other Nova tabs and retry.'))
+    }
   })
 }
 
@@ -31,9 +47,8 @@ function withTransaction<T>(
       callback()
     }
 
-    let tx: IDBTransaction
     try {
-      tx = db.transaction(STORE, mode)
+      const tx = db.transaction(STORE, mode)
       const request = operation(tx.objectStore(STORE))
       request.onsuccess = () => { result = request.result }
       request.onerror = () => finish(() => reject(request.error ?? new Error('Project database request failed.')))
