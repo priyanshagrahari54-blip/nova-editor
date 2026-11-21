@@ -8,7 +8,7 @@ try {
   const context = await browser.newContext()
   const page = await context.newPage()
   page.setDefaultTimeout(15_000)
-  await page.goto(baseUrl, { waitUntil: 'networkidle' })
+  await page.goto(baseUrl, { waitUntil: 'domcontentloaded' })
   await page.locator('.nova-app').waitFor()
 
   // Undo/redo through the actual toolbar, not only HistoryManager unit tests.
@@ -30,7 +30,7 @@ try {
   await page.getByRole('button', { name: 'browser-smoke.svg' }).waitFor()
   await page.locator('.save-button').click()
   await page.getByText('Project saved locally with 1 media file.').waitFor()
-  await page.reload({ waitUntil: 'networkidle' })
+  await page.reload({ waitUntil: 'domcontentloaded' })
   await page.getByRole('button', { name: 'Projects', exact: true }).click()
   await page.getByRole('button', { name: 'Restore saved settings & layers' }).click()
   await page.getByText('Project restored with 1 media file.').waitFor()
@@ -65,7 +65,7 @@ try {
   await page.getByRole('button', { name: 'browser-smoke.webm' }).waitFor()
   await page.locator('.save-button').click()
   await page.getByText('Project saved locally with 2 media files.').waitFor()
-  await page.reload({ waitUntil: 'networkidle' })
+  await page.reload({ waitUntil: 'domcontentloaded' })
   await page.getByRole('button', { name: 'Projects', exact: true }).click()
   await page.getByRole('button', { name: 'Restore saved settings & layers' }).click()
   await page.getByText('Project restored with 2 media files.').waitFor()
